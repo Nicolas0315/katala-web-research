@@ -4,6 +4,7 @@ import json
 import os
 import shutil
 import subprocess
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from html.parser import HTMLParser
 from typing import Protocol
 from urllib.parse import quote_plus, urlencode
@@ -194,10 +195,86 @@ class BraveSearch:
         return rank_results(query, results)
 
 
+class OpenAlexSearch:
+    name = "openalex"
+
+    def search(self, query: str, *, limit: int = 10) -> list[SearchResult]:
+        token = _secret_env("OPENALEX_API_KEY")
+        if not token:
+            raise FetchError("OPENALEX_API_KEY is required for OpenAlex search")
+        url = "https://api.openalex.org/works?" + urlencode(
+            {
+                "api_key": token,
+                "search": query,
+                "per_page": min(limit, 100),
+                "sort": "relevance_score:desc",
+                "select": ",".join(
+                    [
+                        "id",
+                        "doi",
+                        "title",
+                        "display_name",
+                        "publication_year",
+                        "publication_date",
+                        "type",
+                        "cited_by_count",
+                        "is_retracted",
+                        "open_access",
+                        "primary_location",
+                        "abstract_inverted_index",
+                    ]
+                ),
+            }
+        )
+        response = fetch_url(url, headers={"Accept": "application/json"})
+        payload = json.loads(response.text)
+        results = []
+        for idx, item in enumerate(payload.get("results", [])[:limit], start=1):
+            results.append(
+                SearchResult(
+                    title=item.get("display_name") or item.get("title") or item.get("id") or "",
+                    url=_openalex_url(item),
+                    snippet=_openalex_snippet(item),
+                    source=self.name,
+                    published_at=item.get("publication_date") or _year_as_date(item.get("publication_year")),
+                    rank=idx,
+                )
+            )
+        return rank_results(query, results)
+
+
+class MetaSearch:
+    name = "meta"
+
+    def search(self, query: str, *, limit: int = 10) -> list[SearchResult]:
+        providers = [
+            name.strip()
+            for name in os.environ.get("KWR_META_PROVIDERS", "ddg,github,openalex,searxng").split(",")
+            if name.strip() and name.strip() != self.name
+        ]
+        if not providers:
+            return []
+        combined: list[SearchResult] = []
+        with ThreadPoolExecutor(max_workers=min(len(providers), 4)) as executor:
+            futures = {
+                executor.submit(get_provider(name).search, query, limit=max(2, min(limit, 8))): name
+                for name in providers
+                if name in PROVIDERS
+            }
+            for future in as_completed(futures):
+                try:
+                    combined.extend(future.result())
+                except Exception:
+                    continue
+        return rank_results(query, combined)[:limit]
+
+
 PROVIDERS: dict[str, SearchProvider] = {
     "brave": BraveSearch(),
     "ddg": DuckDuckGoSearch(),
     "github": GitHubRepoSearch(),
+    "meta": MetaSearch(),
+    "openalex": OpenAlexSearch(),
     "jina": JinaSearch(),
     "searxng": SearxngSearch(),
 }
@@ -232,6 +309,16 @@ def provider_status() -> list[dict[str, str]]:
             "provider": "brave",
             "status": "ok" if os.environ.get("BRAVE_SEARCH_API_KEY") else "off",
             "detail": "BRAVE_SEARCH_API_KEY optional; uses Brave Web Search API",
+        },
+        {
+            "provider": "openalex",
+            "status": "ok" if _secret_env("OPENALEX_API_KEY") else "off",
+            "detail": "OPENALEX_API_KEY optional; uses scholarly works search",
+        },
+        {
+            "provider": "meta",
+            "status": "ok",
+            "detail": "local metasearch fan-out; KWR_META_PROVIDERS controls engines",
         },
     ]
 
@@ -299,3 +386,66 @@ def _github_snippet(item: dict) -> str:
     if item.get("isFork"):
         parts.append("fork=true")
     return " | ".join(parts)
+
+
+def _secret_env(name: str) -> str:
+    value = os.environ.get(name, "")
+    if not value.startswith("op://"):
+        return value
+    if not shutil.which("op"):
+        return ""
+    completed = subprocess.run(["op", "read", value], text=True, capture_output=True, check=False)
+    if completed.returncode != 0:
+        return ""
+    return completed.stdout.strip()
+
+
+def _openalex_url(item: dict) -> str:
+    primary_location = item.get("primary_location") or {}
+    if primary_location.get("landing_page_url"):
+        return str(primary_location["landing_page_url"])
+    if item.get("doi"):
+        return str(item["doi"])
+    return str(item.get("id") or "")
+
+
+def _openalex_snippet(item: dict) -> str:
+    parts = []
+    abstract = _abstract_from_inverted_index(item.get("abstract_inverted_index"))
+    if abstract:
+        parts.append(abstract[:420])
+    if item.get("publication_year"):
+        parts.append(f"year={item['publication_year']}")
+    if item.get("type"):
+        parts.append(f"type={item['type']}")
+    if item.get("cited_by_count") is not None:
+        parts.append(f"citations={item['cited_by_count']}")
+    if item.get("is_retracted"):
+        parts.append("retracted=true")
+    open_access = item.get("open_access") or {}
+    if open_access.get("is_oa") is not None:
+        parts.append(f"oa={str(open_access.get('is_oa')).lower()}")
+    primary_location = item.get("primary_location") or {}
+    source = primary_location.get("source") or {}
+    if source.get("display_name"):
+        parts.append(f"source={source['display_name']}")
+    return " | ".join(parts)
+
+
+def _abstract_from_inverted_index(value: object) -> str:
+    if not isinstance(value, dict):
+        return ""
+    positions: list[tuple[int, str]] = []
+    for word, indexes in value.items():
+        if not isinstance(word, str) or not isinstance(indexes, list):
+            continue
+        for index in indexes:
+            if isinstance(index, int):
+                positions.append((index, word))
+    return " ".join(word for _idx, word in sorted(positions))
+
+
+def _year_as_date(value: object) -> str | None:
+    if isinstance(value, int):
+        return f"{value}-01-01"
+    return None

@@ -35,6 +35,8 @@ The search surface supports multiple backends with different failure modes:
 - `jina`: optional semantic web search through `JINA_API_KEY`.
 - `searxng`: optional private metasearch through `KWR_SEARXNG_URL`.
 - `brave`: optional Brave Web Search API through `BRAVE_SEARCH_API_KEY`.
+- `openalex`: optional scholarly works search through `OPENALEX_API_KEY`.
+- `meta`: local metasearch fan-out through `KWR_META_PROVIDERS`.
 
 Provider outputs are normalized into one `SearchResult` shape:
 
@@ -47,6 +49,8 @@ Provider outputs are normalized into one `SearchResult` shape:
 - score
 
 This lets the rest of the system rank, archive, and report results without caring which provider produced them.
+
+The `meta` provider applies the useful SearXNG pattern without embedding SearXNG itself: each engine remains a small adapter, outputs are normalized, per-engine failures are isolated, and final ranking is handled by the Katala-style Gate -> Scorer -> Selector layer.
 
 ## 3. Local Prior-Art Corpus
 

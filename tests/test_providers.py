@@ -1,9 +1,11 @@
+import json
 import os
 import unittest
 from unittest.mock import patch
 
 from katala_web_research.http import HttpResponse
-from katala_web_research.providers import BraveSearch, SearxngSearch
+from katala_web_research.models import SearchResult
+from katala_web_research.providers import BraveSearch, MetaSearch, OpenAlexSearch, SearxngSearch
 
 
 class ProviderTests(unittest.TestCase):
@@ -34,6 +36,64 @@ class ProviderTests(unittest.TestCase):
 
         self.assertEqual(results[0].url, "https://example.com/b")
         self.assertEqual(results[0].source, "brave")
+
+    def test_openalex_provider_parses_work_results(self):
+        body = json.dumps(
+            {
+                "results": [
+                    {
+                        "id": "https://openalex.org/W1",
+                        "doi": "https://doi.org/10.123/example",
+                        "display_name": "Query Decomposition for RAG",
+                        "publication_year": 2025,
+                        "publication_date": "2025-07-01",
+                        "type": "article",
+                        "cited_by_count": 42,
+                        "open_access": {"is_oa": True},
+                        "primary_location": {
+                            "landing_page_url": "https://aclanthology.org/2025.acl-srw.32/",
+                            "source": {"display_name": "ACL Anthology"},
+                        },
+                        "abstract_inverted_index": {"query": [0], "decomposition": [1], "retrieval": [2]},
+                    }
+                ]
+            }
+        ).encode()
+        response = HttpResponse(
+            url="https://api.openalex.org/works",
+            status=200,
+            headers={"content-type": "application/json"},
+            body=body,
+        )
+        with patch.dict(os.environ, {"OPENALEX_API_KEY": "test"}, clear=False):
+            with patch("katala_web_research.providers.fetch_url", return_value=response):
+                results = OpenAlexSearch().search("query decomposition retrieval")
+
+        self.assertEqual(results[0].url, "https://aclanthology.org/2025.acl-srw.32/")
+        self.assertIn("citations=42", results[0].snippet)
+        self.assertEqual(results[0].source, "openalex")
+
+    def test_meta_provider_merges_and_dedupes_engines(self):
+        class FakeProvider:
+            def __init__(self, name, url):
+                self.name = name
+                self.url = url
+
+            def search(self, query, *, limit=10):
+                return [SearchResult(title=f"{self.name} result", url=self.url, source=self.name, rank=1)]
+
+        fake_providers = {
+            "a": FakeProvider("a", "https://docs.github.com/example"),
+            "b": FakeProvider("b", "https://docs.github.com/example/"),
+            "c": FakeProvider("c", "https://arxiv.org/abs/2510.18633"),
+            "meta": MetaSearch(),
+        }
+        with patch.dict(os.environ, {"KWR_META_PROVIDERS": "a,b,c"}, clear=False):
+            with patch("katala_web_research.providers.PROVIDERS", fake_providers):
+                results = MetaSearch().search("query decomposition", limit=5)
+
+        self.assertEqual(len(results), 2)
+        self.assertIn("https://arxiv.org/abs/2510.18633", {result.url for result in results})
 
 
 if __name__ == "__main__":

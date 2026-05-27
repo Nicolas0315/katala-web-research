@@ -38,8 +38,26 @@ PYTHONPATH=src python3 -m katala_web_research.cli brief prompt --archive /tmp/kw
   - Decision: expose the toolkit through stdio JSON-RPC with `initialize`, `tools/list`, and `tools/call`, keeping tools read-oriented and user-controlled.
 - SearXNG Search API docs: `https://docs.searxng.org/dev/search_api.html`
   - Decision: support optional `KWR_SEARXNG_URL` provider using `format=json`.
+- SearXNG source repository: `https://github.com/searxng/searxng`
+  - Retrieved: 2026-05-27
+  - Decision: do not vendor or fork SearXNG because its source is AGPL-3.0; reuse the metasearch architecture boundary in MIT-compatible local code.
+- SearXNG engine and settings docs: `https://docs.searxng.org/dev/engines/index.html`, `https://docs.searxng.org/admin/settings/settings.html`
+  - Retrieved: 2026-05-27
+  - Decision: model each backend as a small adapter and keep engine selection in environment/config.
+- OpenAlex API authentication docs: `https://developers.openalex.org/api-reference/authentication`
+  - Retrieved: 2026-05-27
+  - Decision: require `OPENALEX_API_KEY`, support 1Password `op://` references, and keep concrete credentials out of tracked files.
 - Brave Search API docs: `https://api-dashboard.search.brave.com/app/documentation/web-search/get-started`
   - Decision: support optional `BRAVE_SEARCH_API_KEY` provider for the official Web Search API endpoint.
+
+## Metasearch Evidence Record
+
+- local config: `.env` is ignored; `.env.example` contains only placeholder 1Password reference shape.
+- decision: `meta` fans out across `KWR_META_PROVIDERS`, isolates engine failures, normalizes into `SearchResult`, then applies Katala-style Gate -> Scorer -> Selector ranking.
+- verification command: `op run --env-file=.env -- scripts/benchmark-research-quality.py --iterations 30 --live-openalex --live-meta --out docs/research-quality-benchmark.md`
+- risk: OpenAlex broad queries can return noisy scholarly candidates; GitHub-heavy themes can dominate unless source quotas and query rewriting improve.
+- rollback: set `KWR_PROVIDER=ddg` or remove `meta,openalex` from `KWR_META_PROVIDERS`.
+- next refresh: 2026-06-27
 
 ## Design Consequence
 

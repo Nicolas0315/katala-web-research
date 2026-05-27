@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import re
+from collections import Counter
+from math import ceil
 from urllib.parse import urlparse
 
 from .models import SearchResult
@@ -14,7 +16,7 @@ def query_tokens(query: str) -> set[str]:
 
 
 def rank_results(query: str, results: list[SearchResult]) -> list[SearchResult]:
-    from .source_quality import source_quality_score
+    from .source_quality import classify_url, source_quality_score
 
     seen: set[str] = set()
     ranked: list[SearchResult] = []
@@ -22,11 +24,14 @@ def rank_results(query: str, results: list[SearchResult]) -> list[SearchResult]:
         normalized = _dedupe_key(result.url)
         if not normalized or normalized in seen:
             continue
+        if not _passes_search_gates(result):
+            continue
         seen.add(normalized)
         source_weight = 0.25 if result.source in {"github", "jina"} else 0.0
         result.score = round(source_quality_score(query, result) + source_weight + max(0, 20 - result.rank) / 100, 3)
         ranked.append(result)
     ranked.sort(key=lambda item: (-item.score, item.rank, item.url))
+    ranked = _select_with_katala_diversity(ranked, classify_url)
     for idx, result in enumerate(ranked, start=1):
         result.rank = idx
     return ranked
@@ -38,3 +43,44 @@ def _dedupe_key(url: str) -> str:
         return ""
     path = parsed.path.rstrip("/") or "/"
     return f"{parsed.scheme.lower()}://{parsed.netloc.lower()}{path}"
+
+
+def _passes_search_gates(result: SearchResult) -> bool:
+    if not result.url or not result.title:
+        return False
+    snippet = result.snippet.lower()
+    if "retracted=true" in snippet:
+        return False
+    return True
+
+
+def _select_with_katala_diversity(results: list[SearchResult], classifier) -> list[SearchResult]:
+    if len(results) <= 2:
+        return results
+    k = len(results)
+    host_cap = max(1, ceil(k * 0.4))
+    type_cap = max(1, ceil(k * 0.55))
+    selected: list[SearchResult] = []
+    selected_keys: set[str] = set()
+    host_count: Counter[str] = Counter()
+    type_count: Counter[str] = Counter()
+
+    for result in results:
+        host = urlparse(result.url).netloc.lower().removeprefix("www.")
+        source_type, _quality = classifier(result.url)
+        if host_count[host] >= host_cap:
+            continue
+        if type_count[source_type] >= type_cap:
+            continue
+        selected.append(result)
+        selected_keys.add(result.url)
+        host_count[host] += 1
+        type_count[source_type] += 1
+
+    for result in results:
+        if len(selected) >= k:
+            break
+        if result.url not in selected_keys:
+            selected.append(result)
+            selected_keys.add(result.url)
+    return selected

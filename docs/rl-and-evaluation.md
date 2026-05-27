@@ -26,6 +26,30 @@ The current implementation keeps these actions explicit through:
 - `kwr investigate --expand-queries`
 - `kwr eval`
 - `scripts/benchmark-token-budget.py`
+- `scripts/benchmark-research-quality.py`
+
+## Katala Search Engine Adaptation
+
+The search engine borrows Katala Match's pipeline discipline:
+
+- Gate: reject unusable candidates early, including empty URLs and retracted scholarly works.
+- Scorer: combine fit, source quality, freshness, and risk penalties into an inspectable score.
+- Selector: apply host and source-type diversity caps before final Top-K output.
+- SideEffect: record benchmark reports instead of silently changing runtime state.
+
+This mirrors Katala Match's `Source -> Hydrator -> Gate -> Scorer -> Selector -> SideEffect` shape without importing the private workspace package.
+
+## SearXNG-Inspired Engine Boundary
+
+SearXNG's public source and docs show a broad engine catalog, engine result normalization, and settings-driven engine selection. `katala-web-research` keeps the same extensibility boundary in a smaller form:
+
+- each provider is a replaceable engine adapter
+- `meta` fans out across configured engines
+- every engine returns `SearchResult`
+- ranking and diversity are centralized after normalization
+- `.env`/1Password references configure optional engines without committing secrets
+
+This keeps the project MIT-compatible while still applying SearXNG's metasearch architecture.
 
 ## Reward Signals
 

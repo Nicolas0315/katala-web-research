@@ -43,6 +43,13 @@ KWR_PROVIDER=github KWR_READ_TOP=0 \
 scripts/kwr-research-cycle.sh "agent research tools"
 ```
 
+Run local metasearch across configured engines:
+
+```sh
+KWR_PROVIDER=meta KWR_META_PROVIDERS=ddg,github,openalex \
+op run --env-file=.env -- scripts/kwr-research-cycle.sh "research agent evaluation metrics"
+```
+
 Disable query decomposition when you need a single exact query:
 
 ```sh

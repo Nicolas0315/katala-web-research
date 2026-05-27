@@ -25,6 +25,12 @@ rm -f /tmp/katala-web-research-eval.txt /tmp/katala-web-research-eval.md
 echo "== token budget benchmark =="
 scripts/benchmark-token-budget.py
 
+echo "== research quality benchmark =="
+scripts/benchmark-research-quality.py --iterations 30 --out /tmp/katala-web-research-quality.md >/tmp/katala-web-research-quality.txt
+grep -q "all_passed: true" /tmp/katala-web-research-quality.txt
+grep -q "Deterministic Multi-Run Evaluation" /tmp/katala-web-research-quality.md
+rm -f /tmp/katala-web-research-quality.txt /tmp/katala-web-research-quality.md
+
 echo "== tracked artifact guard =="
 if git rev-parse --show-toplevel >/dev/null 2>&1; then
   tracked_sensitive="$(git ls-files -- . | grep -E '(^|/)(raw|downloads|sessions|logs?)/|\.env($|\.)|\.jsonl$|\.sqlite(-shm|-wal)?$|\.log$|__pycache__|\.pyc|\.DS_Store' | grep -vE '(^|/)\.env\.example$' || true)"

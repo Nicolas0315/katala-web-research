@@ -5,6 +5,9 @@ __pycache__/
 .mypy_cache/
 .DS_Store
 .venv/
+.env
+.env.*
+!.env.example
 dist/
 build/
 *.egg-info/
@@ -14,4 +17,3 @@ build/
 *.sqlite-wal
 *.jsonl
 *.log
-

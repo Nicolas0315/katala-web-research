@@ -31,6 +31,7 @@ Search the web with a no-key default provider:
 
 ```sh
 kwr search "agent web research tools" --limit 5
+kwr search "agent web research tools" --provider meta --limit 8
 ```
 
 Read a URL:
@@ -88,6 +89,7 @@ Run deterministic research-quality evaluation:
 
 ```sh
 kwr eval --out reports/research-quality.md
+scripts/benchmark-research-quality.py --iterations 30 --out reports/research-quality-benchmark.md
 ```
 
 Run the MCP stdio server:
@@ -111,6 +113,8 @@ Optional providers use environment variables only:
 - `GITHUB_TOKEN` for higher GitHub REST API limits
 - `KWR_SEARXNG_URL` for a private SearXNG instance with JSON enabled
 - `BRAVE_SEARCH_API_KEY` for Brave Web Search API
+- `OPENALEX_API_KEY` for OpenAlex scholarly works search
+- `KWR_META_PROVIDERS` for local metasearch fan-out, for example `ddg,github,openalex,searxng`
 
 The CLI never writes those values into archives, reports, logs, or config files.
 
@@ -157,6 +161,7 @@ Completion evidence is tracked in [docs/completion-audit.md](docs/completion-aud
 - [docs/operations.md](docs/operations.md): routine operation and token-budget benchmarks.
 - [docs/rl-and-evaluation.md](docs/rl-and-evaluation.md): reinforcement-learning path and reward design.
 - [docs/research-quality-benchmark.md](docs/research-quality-benchmark.md): benchmark log.
+- [docs/metasearch-engine-design.md](docs/metasearch-engine-design.md): SearXNG-inspired Katala metasearch design.
 - [docs/design.md](docs/design.md): architecture and contracts.
 - [docs/source-evidence.md](docs/source-evidence.md): source evidence and implementation decisions.
 - [docs/mcp-config-examples.md](docs/mcp-config-examples.md): MCP client configuration examples.
