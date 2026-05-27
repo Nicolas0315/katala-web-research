@@ -53,7 +53,7 @@ PYTHONPATH=src python3 -m katala_web_research.cli brief prompt --archive /tmp/kw
 ## Metasearch Evidence Record
 
 - local config: `.env` is ignored; `.env.example` contains only placeholder 1Password reference shape.
-- decision: `meta` fans out across `KWR_META_PROVIDERS`, isolates engine failures, normalizes into `SearchResult`, then applies Katala-style Gate -> Scorer -> Selector ranking.
+- decision: `meta` fans out across `KWR_META_PROFILE` or `KWR_META_PROVIDERS`, isolates engine failures, normalizes into `SearchResult`, applies Reciprocal Rank Fusion, then applies Katala-style Gate -> Scorer -> Selector ranking.
 - verification command: `op run --env-file=.env -- scripts/benchmark-research-quality.py --iterations 30 --live-openalex --live-meta --out docs/research-quality-benchmark.md`
 - risk: OpenAlex broad queries can return noisy scholarly candidates; GitHub-heavy themes can dominate unless source quotas and query rewriting improve.
 - rollback: set `KWR_PROVIDER=ddg` or remove `meta,openalex` from `KWR_META_PROVIDERS`.

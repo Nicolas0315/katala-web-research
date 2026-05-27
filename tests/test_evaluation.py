@@ -9,7 +9,7 @@ class EvaluationTests(unittest.TestCase):
 
         self.assertTrue(summary.passed)
         self.assertGreaterEqual(summary.score, 80)
-        self.assertEqual(len(summary.cases), 3)
+        self.assertEqual(len(summary.cases), 4)
 
     def test_eval_report_includes_case_scores(self):
         summary = run_eval(min_score=80)

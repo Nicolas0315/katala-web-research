@@ -62,13 +62,14 @@ class Archive:
               content TEXT NOT NULL,
               kind TEXT NOT NULL,
               indexed_at TEXT NOT NULL,
+              context TEXT NOT NULL DEFAULT '',
               file_size INTEGER NOT NULL DEFAULT 0,
               file_mtime_ns INTEGER NOT NULL DEFAULT 0,
               content_sha256 TEXT NOT NULL DEFAULT '',
               UNIQUE(repo_path, rel_path)
             );
             CREATE VIRTUAL TABLE IF NOT EXISTS repo_documents_fts
-              USING fts5(repo_name, rel_path, title, content, kind UNINDEXED, content='repo_documents', content_rowid='id');
+              USING fts5(repo_name, rel_path, title, context, content, kind UNINDEXED, content='repo_documents', content_rowid='id');
             CREATE TRIGGER IF NOT EXISTS pages_ai AFTER INSERT ON pages BEGIN
               INSERT INTO pages_fts(rowid, title, content, url)
               VALUES (new.id, new.title, new.content, new.url);
@@ -84,22 +85,23 @@ class Archive:
               VALUES (new.id, new.title, new.content, new.url);
             END;
             CREATE TRIGGER IF NOT EXISTS repo_documents_ai AFTER INSERT ON repo_documents BEGIN
-              INSERT INTO repo_documents_fts(rowid, repo_name, rel_path, title, content, kind)
-              VALUES (new.id, new.repo_name, new.rel_path, new.title, new.content, new.kind);
+              INSERT INTO repo_documents_fts(rowid, repo_name, rel_path, title, context, content, kind)
+              VALUES (new.id, new.repo_name, new.rel_path, new.title, new.context, new.content, new.kind);
             END;
             CREATE TRIGGER IF NOT EXISTS repo_documents_ad AFTER DELETE ON repo_documents BEGIN
-              INSERT INTO repo_documents_fts(repo_documents_fts, rowid, repo_name, rel_path, title, content, kind)
-              VALUES('delete', old.id, old.repo_name, old.rel_path, old.title, old.content, old.kind);
+              INSERT INTO repo_documents_fts(repo_documents_fts, rowid, repo_name, rel_path, title, context, content, kind)
+              VALUES('delete', old.id, old.repo_name, old.rel_path, old.title, old.context, old.content, old.kind);
             END;
             CREATE TRIGGER IF NOT EXISTS repo_documents_au AFTER UPDATE ON repo_documents BEGIN
-              INSERT INTO repo_documents_fts(repo_documents_fts, rowid, repo_name, rel_path, title, content, kind)
-              VALUES('delete', old.id, old.repo_name, old.rel_path, old.title, old.content, old.kind);
-              INSERT INTO repo_documents_fts(rowid, repo_name, rel_path, title, content, kind)
-              VALUES (new.id, new.repo_name, new.rel_path, new.title, new.content, new.kind);
+              INSERT INTO repo_documents_fts(repo_documents_fts, rowid, repo_name, rel_path, title, context, content, kind)
+              VALUES('delete', old.id, old.repo_name, old.rel_path, old.title, old.context, old.content, old.kind);
+              INSERT INTO repo_documents_fts(rowid, repo_name, rel_path, title, context, content, kind)
+              VALUES (new.id, new.repo_name, new.rel_path, new.title, new.context, new.content, new.kind);
             END;
             """
         )
         self._ensure_repo_document_columns()
+        self._ensure_repo_document_fts_schema()
         self.conn.commit()
 
     def _ensure_repo_document_columns(self) -> None:
@@ -111,10 +113,45 @@ class Archive:
             "file_size": "ALTER TABLE repo_documents ADD COLUMN file_size INTEGER NOT NULL DEFAULT 0",
             "file_mtime_ns": "ALTER TABLE repo_documents ADD COLUMN file_mtime_ns INTEGER NOT NULL DEFAULT 0",
             "content_sha256": "ALTER TABLE repo_documents ADD COLUMN content_sha256 TEXT NOT NULL DEFAULT ''",
+            "context": "ALTER TABLE repo_documents ADD COLUMN context TEXT NOT NULL DEFAULT ''",
         }
         for column, statement in migrations.items():
             if column not in existing:
                 self.conn.execute(statement)
+
+    def _ensure_repo_document_fts_schema(self) -> None:
+        columns = {
+            row["name"]
+            for row in self.conn.execute("PRAGMA table_info(repo_documents_fts)").fetchall()
+        }
+        if "context" in columns:
+            return
+        self.conn.executescript(
+            """
+            DROP TRIGGER IF EXISTS repo_documents_ai;
+            DROP TRIGGER IF EXISTS repo_documents_ad;
+            DROP TRIGGER IF EXISTS repo_documents_au;
+            DROP TABLE IF EXISTS repo_documents_fts;
+            CREATE VIRTUAL TABLE repo_documents_fts
+              USING fts5(repo_name, rel_path, title, context, content, kind UNINDEXED, content='repo_documents', content_rowid='id');
+            CREATE TRIGGER repo_documents_ai AFTER INSERT ON repo_documents BEGIN
+              INSERT INTO repo_documents_fts(rowid, repo_name, rel_path, title, context, content, kind)
+              VALUES (new.id, new.repo_name, new.rel_path, new.title, new.context, new.content, new.kind);
+            END;
+            CREATE TRIGGER repo_documents_ad AFTER DELETE ON repo_documents BEGIN
+              INSERT INTO repo_documents_fts(repo_documents_fts, rowid, repo_name, rel_path, title, context, content, kind)
+              VALUES('delete', old.id, old.repo_name, old.rel_path, old.title, old.context, old.content, old.kind);
+            END;
+            CREATE TRIGGER repo_documents_au AFTER UPDATE ON repo_documents BEGIN
+              INSERT INTO repo_documents_fts(repo_documents_fts, rowid, repo_name, rel_path, title, context, content, kind)
+              VALUES('delete', old.id, old.repo_name, old.rel_path, old.title, old.context, old.content, old.kind);
+              INSERT INTO repo_documents_fts(rowid, repo_name, rel_path, title, context, content, kind)
+              VALUES (new.id, new.repo_name, new.rel_path, new.title, new.context, new.content, new.kind);
+            END;
+            INSERT INTO repo_documents_fts(rowid, repo_name, rel_path, title, context, content, kind)
+              SELECT id, repo_name, rel_path, title, context, content, kind FROM repo_documents;
+            """
+        )
 
     def store_run(self, query: str, provider: str, results: list[SearchResult]) -> int:
         cur = self.conn.execute(
@@ -174,16 +211,17 @@ class Archive:
         self.conn.execute(
             """
             INSERT INTO repo_documents(
-              repo_path, repo_name, rel_path, title, content, kind, indexed_at,
+              repo_path, repo_name, rel_path, title, content, kind, indexed_at, context,
               file_size, file_mtime_ns, content_sha256
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(repo_path, rel_path) DO UPDATE SET
               repo_name=excluded.repo_name,
               title=excluded.title,
               content=excluded.content,
               kind=excluded.kind,
               indexed_at=excluded.indexed_at,
+              context=excluded.context,
               file_size=excluded.file_size,
               file_mtime_ns=excluded.file_mtime_ns,
               content_sha256=excluded.content_sha256
@@ -196,6 +234,7 @@ class Archive:
                 document.content,
                 document.kind,
                 document.indexed_at,
+                document.context,
                 document.file_size,
                 document.file_mtime_ns,
                 document.content_sha256,
@@ -251,7 +290,7 @@ class Archive:
         rows = self.conn.execute(
             """
             SELECT d.repo_path, d.repo_name, d.rel_path, d.title,
-                   snippet(repo_documents_fts, 3, '[', ']', '...', 18) AS snippet,
+                   snippet(repo_documents_fts, 4, '[', ']', '...', 18) AS snippet,
                    d.kind,
                    bm25(repo_documents_fts) AS rank,
                    d.indexed_at

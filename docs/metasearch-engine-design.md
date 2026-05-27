@@ -45,7 +45,7 @@ SearXNG is strong at broad fan-out. The Katala layer adds research-specific judg
 
 ## Current Engine
 
-`kwr search --provider meta` fans out over `KWR_META_PROVIDERS`.
+`kwr search --provider meta` fans out over `KWR_META_PROFILE` or explicit `KWR_META_PROVIDERS`.
 
 Example:
 
@@ -54,18 +54,27 @@ KWR_META_PROVIDERS=ddg,github,openalex \
 op run --env-file=.env -- kwr search "research agent evaluation metrics" --provider meta --limit 8
 ```
 
-The default engine list is:
+The default profile is `broad`:
 
 ```text
 ddg,github,openalex,searxng
 ```
 
+Available profiles:
+
+- `broad`: default web, code, scholarly, and SearXNG mix
+- `docs`: official/vendor documentation bias
+- `scholarly`: OpenAlex-first paper discovery
+- `code`: GitHub-first implementation discovery
+- `fresh`: current web/news-like discovery
+- `local`: low-dependency DDG/GitHub path
+
 Engines that lack credentials or URLs fail closed and do not block the whole search.
+
+Before final Katala scoring, `meta` applies Reciprocal Rank Fusion so a URL seen by multiple engines gets a consensus boost without trusting incompatible engine score scales.
 
 ## Next Engine Improvements
 
-- Per-theme engine presets: `scholarly`, `code`, `docs`, `broad-web`
-- Query rewriting per engine: OpenAlex should receive more paper-like terms than DDG
 - Engine health scores from recent failures, latency, and useful-result rate
 - Host/source quotas exposed as config
 - Optional local SearXNG instance bootstrap, kept outside the MIT code path

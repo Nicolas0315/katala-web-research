@@ -9,6 +9,7 @@ from html.parser import HTMLParser
 from typing import Protocol
 from urllib.parse import quote_plus, urlencode
 
+from .fusion import fuse_and_rank
 from .http import FetchError, fetch_url
 from .models import SearchResult
 from .rank import rank_results
@@ -143,7 +144,7 @@ class SearxngSearch:
         base_url = os.environ.get("KWR_SEARXNG_URL", "").rstrip("/")
         if not base_url:
             raise FetchError("KWR_SEARXNG_URL is required for SearXNG search")
-        url = base_url + "/search?" + urlencode({"q": query, "format": "json"})
+        url = base_url + "/search?" + urlencode(_searxng_params(query))
         response = fetch_url(url, headers={"Accept": "application/json"})
         payload = json.loads(response.text)
         results = []
@@ -247,26 +248,37 @@ class MetaSearch:
     name = "meta"
 
     def search(self, query: str, *, limit: int = 10) -> list[SearchResult]:
-        providers = [
-            name.strip()
-            for name in os.environ.get("KWR_META_PROVIDERS", "ddg,github,openalex,searxng").split(",")
-            if name.strip() and name.strip() != self.name
-        ]
+        profile = _meta_profile()
+        providers = _meta_provider_names(profile)
         if not providers:
             return []
-        combined: list[SearchResult] = []
+        result_lists: list[list[SearchResult]] = []
         with ThreadPoolExecutor(max_workers=min(len(providers), 4)) as executor:
             futures = {
-                executor.submit(get_provider(name).search, query, limit=max(2, min(limit, 8))): name
+                executor.submit(
+                    get_provider(name).search,
+                    _rewrite_query_for_provider(query, provider=name, profile=profile),
+                    limit=max(2, min(limit, 8)),
+                ): name
                 for name in providers
                 if name in PROVIDERS
             }
             for future in as_completed(futures):
                 try:
-                    combined.extend(future.result())
+                    result_lists.append(future.result())
                 except Exception:
                     continue
-        return rank_results(query, combined)[:limit]
+        return fuse_and_rank(query, result_lists, limit=limit)
+
+
+META_PROFILES: dict[str, tuple[str, ...]] = {
+    "broad": ("ddg", "github", "openalex", "searxng"),
+    "docs": ("ddg", "searxng", "github", "jina"),
+    "scholarly": ("openalex", "searxng", "ddg"),
+    "code": ("github", "searxng", "ddg"),
+    "fresh": ("ddg", "searxng", "brave"),
+    "local": ("ddg", "github"),
+}
 
 
 PROVIDERS: dict[str, SearchProvider] = {
@@ -318,9 +330,52 @@ def provider_status() -> list[dict[str, str]]:
         {
             "provider": "meta",
             "status": "ok",
-            "detail": "local metasearch fan-out; KWR_META_PROVIDERS controls engines",
+            "detail": f"local metasearch fan-out; profile={_meta_profile()} providers={','.join(_meta_provider_names(_meta_profile()))}",
         },
     ]
+
+
+def _meta_profile() -> str:
+    value = os.environ.get("KWR_META_PROFILE", "broad").strip().lower()
+    return value if value in META_PROFILES else "broad"
+
+
+def _meta_provider_names(profile: str) -> list[str]:
+    raw = os.environ.get("KWR_META_PROVIDERS", "").strip()
+    if raw:
+        return [name.strip() for name in raw.split(",") if name.strip() and name.strip() != "meta"]
+    return list(META_PROFILES.get(profile, META_PROFILES["broad"]))
+
+
+def _rewrite_query_for_provider(query: str, *, provider: str, profile: str) -> str:
+    if provider == "openalex":
+        if profile == "scholarly":
+            return f"{query} paper benchmark evaluation"
+        if profile == "broad":
+            return f"{query} scholarly research"
+    if provider == "github" and profile == "code":
+        return f"{query} implementation library"
+    if provider in {"ddg", "searxng"} and profile == "docs":
+        return f"{query} official documentation"
+    if provider in {"ddg", "searxng", "brave"} and profile == "fresh":
+        return f"{query} latest"
+    return query
+
+
+def _searxng_params(query: str) -> dict[str, str]:
+    params = {"q": query, "format": "json"}
+    env_to_param = {
+        "KWR_SEARXNG_CATEGORIES": "categories",
+        "KWR_SEARXNG_ENGINES": "engines",
+        "KWR_SEARXNG_LANGUAGE": "language",
+        "KWR_SEARXNG_TIME_RANGE": "time_range",
+        "KWR_SEARXNG_SAFESEARCH": "safesearch",
+    }
+    for env_name, param_name in env_to_param.items():
+        value = os.environ.get(env_name, "").strip()
+        if value:
+            params[param_name] = value
+    return params
 
 
 class _DuckDuckGoHTMLParser(HTMLParser):

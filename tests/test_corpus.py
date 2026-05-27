@@ -23,6 +23,10 @@ class CorpusTests(unittest.TestCase):
         self.assertIn("pyproject.toml", rel_paths)
         self.assertNotIn("node_modules/README.md", rel_paths)
         self.assertTrue(all(doc.content_sha256 for doc in documents))
+        readme = next(doc for doc in documents if doc.rel_path == "README.md")
+        self.assertIn("repo:sample", readme.context)
+        self.assertIn("path:README.md", readme.context)
+        self.assertIn("headings:Sample Repo", readme.context)
 
     def test_scan_repos_skips_unchanged_docs(self):
         with tempfile.TemporaryDirectory() as tmp:

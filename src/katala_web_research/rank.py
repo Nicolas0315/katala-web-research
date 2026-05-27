@@ -28,7 +28,16 @@ def rank_results(query: str, results: list[SearchResult]) -> list[SearchResult]:
             continue
         seen.add(normalized)
         source_weight = 0.25 if result.source in {"github", "jina"} else 0.0
-        result.score = round(source_quality_score(query, result) + source_weight + max(0, 20 - result.rank) / 100, 3)
+        fusion_weight = min(float(result.metadata.get("rrf_score", 0.0)) * 20, 0.75)
+        consensus_weight = min(max(0, int(result.metadata.get("source_count", 1)) - 1) * 0.2, 0.6)
+        result.score = round(
+            source_quality_score(query, result)
+            + source_weight
+            + fusion_weight
+            + consensus_weight
+            + max(0, 20 - result.rank) / 100,
+            3,
+        )
         ranked.append(result)
     ranked.sort(key=lambda item: (-item.score, item.rank, item.url))
     ranked = _select_with_katala_diversity(ranked, classify_url)

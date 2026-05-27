@@ -50,6 +50,20 @@ KWR_PROVIDER=meta KWR_META_PROVIDERS=ddg,github,openalex \
 op run --env-file=.env -- scripts/kwr-research-cycle.sh "research agent evaluation metrics"
 ```
 
+Use a profile when the source mix is known:
+
+```sh
+KWR_PROVIDER=meta KWR_META_PROFILE=scholarly \
+op run --env-file=.env -- scripts/kwr-research-cycle.sh "rank fusion retrieval benchmark"
+```
+
+Pass SearXNG API controls through when using a private instance:
+
+```sh
+KWR_SEARXNG_LANGUAGE=ja KWR_SEARXNG_TIME_RANGE=month KWR_SEARXNG_SAFESEARCH=1 \
+kwr search "SearXNG engine settings" --provider searxng --limit 5
+```
+
 Disable query decomposition when you need a single exact query:
 
 ```sh

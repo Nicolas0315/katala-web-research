@@ -114,7 +114,9 @@ Optional providers use environment variables only:
 - `KWR_SEARXNG_URL` for a private SearXNG instance with JSON enabled
 - `BRAVE_SEARCH_API_KEY` for Brave Web Search API
 - `OPENALEX_API_KEY` for OpenAlex scholarly works search
-- `KWR_META_PROVIDERS` for local metasearch fan-out, for example `ddg,github,openalex,searxng`
+- `KWR_META_PROFILE` for metasearch profiles: `broad`, `docs`, `scholarly`, `code`, `fresh`, `local`
+- `KWR_META_PROVIDERS` to override profile providers, for example `ddg,github,openalex,searxng`
+- `KWR_SEARXNG_CATEGORIES`, `KWR_SEARXNG_ENGINES`, `KWR_SEARXNG_LANGUAGE`, `KWR_SEARXNG_TIME_RANGE`, `KWR_SEARXNG_SAFESEARCH` for SearXNG API pass-through
 
 The CLI never writes those values into archives, reports, logs, or config files.
 
@@ -163,6 +165,7 @@ Completion evidence is tracked in [docs/completion-audit.md](docs/completion-aud
 - [docs/research-quality-benchmark.md](docs/research-quality-benchmark.md): benchmark log.
 - [docs/metasearch-engine-design.md](docs/metasearch-engine-design.md): SearXNG-inspired Katala metasearch design.
 - [docs/metasearch-enhancement-research-2026-05-27.md](docs/metasearch-enhancement-research-2026-05-27.md): next OSS techniques to strengthen metasearch.
+- [docs/metasearch-implementation-plan-2026-05-27.md](docs/metasearch-implementation-plan-2026-05-27.md): implementation plan and verification boundary.
 - [docs/design.md](docs/design.md): architecture and contracts.
 - [docs/source-evidence.md](docs/source-evidence.md): source evidence and implementation decisions.
 - [docs/mcp-config-examples.md](docs/mcp-config-examples.md): MCP client configuration examples.

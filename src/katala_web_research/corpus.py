@@ -244,6 +244,7 @@ def scan_repo(
                 stats["skipped_unchanged"] = stats.get("skipped_unchanged", 0) + 1
             continue
         title = extract_title(content, fallback=rel_path)
+        kind = classify_file(path)
         docs.append(
             RepoDocument(
                 repo_path=repo_path_str,
@@ -251,8 +252,15 @@ def scan_repo(
                 rel_path=rel_path,
                 title=title,
                 content=content,
-                kind=classify_file(path),
+                kind=kind,
                 indexed_at=indexed_at,
+                context=build_document_context(
+                    repo_name=repo_name,
+                    rel_path=rel_path,
+                    kind=kind,
+                    title=title,
+                    content=content,
+                ),
                 file_size=stat.st_size,
                 file_mtime_ns=stat.st_mtime_ns,
                 content_sha256=content_sha,
@@ -359,3 +367,30 @@ def classify_file(path: Path) -> str:
     if path.suffix.lower() == ".md":
         return "docs"
     return "text"
+
+
+def build_document_context(*, repo_name: str, rel_path: str, kind: str, title: str, content: str) -> str:
+    parts = [
+        f"repo:{repo_name}",
+        f"path:{rel_path}",
+        f"kind:{kind}",
+        f"title:{title}",
+    ]
+    heading_path = extract_heading_path(content)
+    if heading_path:
+        parts.append(f"headings:{heading_path}")
+    return "\n".join(parts)
+
+
+def extract_heading_path(content: str, *, limit: int = 4) -> str:
+    headings: list[str] = []
+    for line in content.splitlines()[:120]:
+        stripped = line.strip()
+        if not stripped.startswith("#"):
+            continue
+        heading = collapse_space(stripped.lstrip("#"))
+        if heading:
+            headings.append(heading)
+        if len(headings) >= limit:
+            break
+    return " > ".join(headings)

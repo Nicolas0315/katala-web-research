@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
@@ -18,6 +18,7 @@ class SearchResult:
     published_at: str | None = None
     rank: int = 0
     score: float = 0.0
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -58,6 +59,7 @@ class RepoDocument:
     content: str
     kind: str
     indexed_at: str
+    context: str = ""
     file_size: int = 0
     file_mtime_ns: int = 0
     content_sha256: str = ""

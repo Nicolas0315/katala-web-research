@@ -50,7 +50,18 @@ Provider outputs are normalized into one `SearchResult` shape:
 
 This lets the rest of the system rank, archive, and report results without caring which provider produced them.
 
-The `meta` provider applies the useful SearXNG pattern without embedding SearXNG itself: each engine remains a small adapter, outputs are normalized, per-engine failures are isolated, and final ranking is handled by the Katala-style Gate -> Scorer -> Selector layer.
+The `meta` provider applies the useful SearXNG pattern without embedding SearXNG itself: each engine remains a small adapter, outputs are normalized, per-engine failures are isolated, Reciprocal Rank Fusion rewards cross-engine consensus, and final ranking is handled by the Katala-style Gate -> Scorer -> Selector layer.
+
+`KWR_META_PROFILE` selects source mix and deterministic query rewriting:
+
+- `broad`: default web, code, scholarly, and SearXNG mix
+- `docs`: official/vendor documentation bias
+- `scholarly`: OpenAlex-first paper discovery
+- `code`: GitHub-first implementation discovery
+- `fresh`: current web discovery
+- `local`: low-dependency DDG/GitHub path
+
+`KWR_META_PROVIDERS` still overrides the profile when an exact engine list is required.
 
 ## 3. Local Prior-Art Corpus
 
@@ -87,6 +98,7 @@ The scanner stores file metadata:
 - file size
 - mtime
 - SHA-256
+- deterministic context metadata: repo name, path, kind, title, and heading path
 
 Repeated scans skip unchanged documents. This makes a large `Documents/GitHub` corpus practical to refresh before research without re-reading everything.
 

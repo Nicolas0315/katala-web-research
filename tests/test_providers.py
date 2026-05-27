@@ -23,6 +23,32 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(results[0].url, "https://example.com/a")
         self.assertEqual(results[0].source, "searxng")
 
+    def test_searxng_provider_passes_optional_parameters(self):
+        response = HttpResponse(
+            url="http://localhost/search",
+            status=200,
+            headers={"content-type": "application/json"},
+            body=b'{"results":[]}',
+        )
+        env = {
+            "KWR_SEARXNG_URL": "http://localhost:8080",
+            "KWR_SEARXNG_CATEGORIES": "general,it",
+            "KWR_SEARXNG_ENGINES": "duckduckgo,wikipedia",
+            "KWR_SEARXNG_LANGUAGE": "ja",
+            "KWR_SEARXNG_TIME_RANGE": "month",
+            "KWR_SEARXNG_SAFESEARCH": "1",
+        }
+        with patch.dict(os.environ, env, clear=False):
+            with patch("katala_web_research.providers.fetch_url", return_value=response) as fetch:
+                SearxngSearch().search("alpha")
+
+        called_url = fetch.call_args.args[0]
+        self.assertIn("categories=general%2Cit", called_url)
+        self.assertIn("engines=duckduckgo%2Cwikipedia", called_url)
+        self.assertIn("language=ja", called_url)
+        self.assertIn("time_range=month", called_url)
+        self.assertIn("safesearch=1", called_url)
+
     def test_brave_provider_parses_results(self):
         response = HttpResponse(
             url="https://api.search.brave.com/res/v1/web/search",
@@ -94,6 +120,30 @@ class ProviderTests(unittest.TestCase):
 
         self.assertEqual(len(results), 2)
         self.assertIn("https://arxiv.org/abs/2510.18633", {result.url for result in results})
+
+    def test_meta_profile_rewrites_queries(self):
+        seen_queries = {}
+
+        class FakeProvider:
+            def __init__(self, name):
+                self.name = name
+
+            def search(self, query, *, limit=10):
+                seen_queries[self.name] = query
+                return [SearchResult(title=f"{self.name} result", url=f"https://example.com/{self.name}", source=self.name, rank=1)]
+
+        fake_providers = {
+            "github": FakeProvider("github"),
+            "searxng": FakeProvider("searxng"),
+            "ddg": FakeProvider("ddg"),
+            "meta": MetaSearch(),
+        }
+        with patch.dict(os.environ, {"KWR_META_PROFILE": "code", "KWR_META_PROVIDERS": ""}, clear=False):
+            with patch("katala_web_research.providers.PROVIDERS", fake_providers):
+                MetaSearch().search("browser agent", limit=3)
+
+        self.assertEqual(seen_queries["github"], "browser agent implementation library")
+        self.assertEqual(seen_queries["ddg"], "browser agent")
 
 
 if __name__ == "__main__":

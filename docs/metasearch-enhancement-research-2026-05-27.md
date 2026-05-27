@@ -226,7 +226,7 @@ Search-specific mapping:
 
 ## Adopt / Skip
 
-- Adopt now: RRF, profiles, SearXNG parameter pass-through, contextual FTS metadata.
+- Implemented in first hardening pass: RRF, profiles, SearXNG parameter pass-through, contextual FTS metadata.
 - Pilot next: LanceDB optional local hybrid index, OpenAlex citation expansion, MCP-style URL read cache.
 - Defer: Qdrant/Vespa/OpenSearch service dependency, ColBERT/SPLADE model stack, online contextual bandit.
 - Avoid: vendoring SearXNG AGPL source into the MIT repo.

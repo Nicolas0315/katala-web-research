@@ -48,17 +48,20 @@ class ArchiveTests(unittest.TestCase):
                         content="This repository improves web research access.",
                         kind="readme",
                         indexed_at="2026-05-27T00:00:00+00:00",
+                        context="repo:sample\npath:README.md\nkind:readme\ntitle:Sample\nheadings:Sample",
                         file_size=51,
                         file_mtime_ns=123,
                         content_sha256="abc",
                     )
                 )
                 hits = archive.query_repos("web research", limit=5)
+                context_hits = archive.query_repos("repo sample", limit=5)
                 metadata = archive.repo_document_metadata()
             finally:
                 archive.close()
 
             self.assertEqual(len(hits), 1)
+            self.assertEqual(len(context_hits), 1)
             self.assertEqual(hits[0].repo_name, "sample")
             self.assertEqual(metadata[("/repos/sample", "README.md")], (51, 123, "abc"))
 

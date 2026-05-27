@@ -128,6 +128,28 @@ def default_eval_cases() -> list[EvalCase]:
             preferred_url_terms=("arxiv.org", "aclanthology.org"),
             discouraged_url_terms=("example.com",),
         ),
+        EvalCase(
+            name="fusion_consensus_beats_single_engine_outlier",
+            query="agent search documentation rank fusion",
+            candidates=[
+                SearchResult(
+                    title="Generic search notes",
+                    url="https://example.com/rank-fusion",
+                    snippet="A single-engine blog result.",
+                    rank=1,
+                ),
+                SearchResult(
+                    title="Agent search rank fusion documentation",
+                    url="https://docs.github.com/en/search-github",
+                    snippet="Official documentation for searching GitHub.",
+                    rank=2,
+                    metadata={"rrf_score": 0.031, "source_count": 2},
+                ),
+            ],
+            expected_plan_intents=("baseline", "official", "primary"),
+            preferred_url_terms=("docs.github.com",),
+            discouraged_url_terms=("example.com",),
+        ),
     ]
 
 

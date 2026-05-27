@@ -99,7 +99,7 @@ The local corpus scanner finds Git repositories under a root and indexes small, 
 
 It skips `.git`, dependency folders, caches, build outputs, raw downloads, logs, and sessions. This makes a local repository corpus such as `~/Documents/GitHub` useful as research prior art without copying entire repos or private runtime artifacts into Git.
 
-Subsequent scans skip unchanged files by comparing stored size, mtime, and SHA-256 metadata. This keeps a large `Documents/GitHub` corpus practical for repeated research refreshes.
+Subsequent scans skip unchanged files by comparing stored size, mtime, and SHA-256 metadata. Indexed documents also carry deterministic context metadata such as repo name, path, kind, title, and heading path. This keeps a large `Documents/GitHub` corpus practical for repeated research refreshes while improving local FTS matching.
 
 ## Current Limits
 
@@ -111,6 +111,7 @@ Subsequent scans skip unchanged files by comparing stored size, mtime, and SHA-2
 
 ## Next Development Slices
 
-1. Add a provider plugin interface for Firecrawl, Tavily, and other paid/custom backends.
+1. Add optional LanceDB/Qdrant hybrid retrieval behind a provider boundary.
 2. Add stronger citation-quality scoring that accounts for retrieval date and source type.
-3. Add a small hosted dashboard only if CLI/MCP usage proves insufficient.
+3. Add BEIR-style relevance labels and external benchmark subsets.
+4. Add a small hosted dashboard only if CLI/MCP usage proves insufficient.
