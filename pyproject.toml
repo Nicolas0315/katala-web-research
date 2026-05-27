@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "katala-web-research"
+version = "0.1.0"
+description = "Local-first web research CLI for search, reading, evidence capture, and archive retrieval."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Katala OS" }]
+keywords = ["research", "web-search", "sqlite", "fts5", "cli"]
+dependencies = []
+
+[project.scripts]
+kwr = "katala_web_research.cli:main"
+katala-web-research = "katala_web_research.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
