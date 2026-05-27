@@ -14,7 +14,8 @@ def query_tokens(query: str) -> set[str]:
 
 
 def rank_results(query: str, results: list[SearchResult]) -> list[SearchResult]:
-    tokens = query_tokens(query)
+    from .source_quality import source_quality_score
+
     seen: set[str] = set()
     ranked: list[SearchResult] = []
     for result in results:
@@ -22,10 +23,8 @@ def rank_results(query: str, results: list[SearchResult]) -> list[SearchResult]:
         if not normalized or normalized in seen:
             continue
         seen.add(normalized)
-        haystack = f"{result.title} {result.snippet}".lower()
-        overlap = sum(1 for token in tokens if token in haystack)
         source_weight = 0.25 if result.source in {"github", "jina"} else 0.0
-        result.score = round(overlap + source_weight + max(0, 20 - result.rank) / 100, 3)
+        result.score = round(source_quality_score(query, result) + source_weight + max(0, 20 - result.rank) / 100, 3)
         ranked.append(result)
     ranked.sort(key=lambda item: (-item.score, item.rank, item.url))
     for idx, result in enumerate(ranked, start=1):
@@ -39,4 +38,3 @@ def _dedupe_key(url: str) -> str:
         return ""
     path = parsed.path.rstrip("/") or "/"
     return f"{parsed.scheme.lower()}://{parsed.netloc.lower()}{path}"
-

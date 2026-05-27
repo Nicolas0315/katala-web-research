@@ -4,17 +4,29 @@ This document explains how `katala-web-research` improves search and research qu
 
 ## Core Idea
 
-The tool improves access to better information by combining five layers:
+The tool improves access to better information by combining six layers:
 
-1. provider diversity
-2. local prior-art corpus
-3. source-quality ranking
-4. page capture into a reusable archive
-5. agent-facing retrieval through CLI and MCP
+1. bounded query planning
+2. provider diversity
+3. local prior-art corpus
+4. source-quality ranking
+5. page capture into a reusable archive
+6. agent-facing retrieval through CLI and MCP
 
 The result is not just "more search results". The result is a repeatable pipeline that can find, rank, capture, and re-query evidence.
 
-## 1. Provider Diversity
+## 1. Bounded Query Planning
+
+`kwr plan` decomposes a broad research question into a small deterministic set of intents:
+
+- baseline query
+- official documentation query
+- primary-source query for code, papers, and benchmarks
+- critique/evaluation query
+
+`kwr brief --expand-queries` and `kwr investigate --expand-queries` use that plan, merge results, dedupe URLs, and rerank the combined candidate pool. The default plan is capped so the workflow does not turn one user question into an unbounded crawl.
+
+## 2. Provider Diversity
 
 The search surface supports multiple backends with different failure modes:
 
@@ -36,7 +48,7 @@ Provider outputs are normalized into one `SearchResult` shape:
 
 This lets the rest of the system rank, archive, and report results without caring which provider produced them.
 
-## 2. Local Prior-Art Corpus
+## 3. Local Prior-Art Corpus
 
 `kwr repos scan` turns local Git repositories into a searchable prior-art corpus. The intended high-value root is:
 
@@ -64,7 +76,7 @@ It skips runtime-heavy or sensitive paths:
 
 This improves search because the system can compare new web candidates against local repo knowledge, prior tools, implementation patterns, and agent instructions that are already on the machine.
 
-## 3. Incremental Corpus Refresh
+## 4. Incremental Corpus Refresh
 
 The scanner stores file metadata:
 
@@ -81,7 +93,7 @@ first bounded scan: indexed_documents: 13
 second bounded scan: indexed_documents: 0, skipped_unchanged: 13
 ```
 
-## 4. Source-Quality Ranking
+## 5. Source-Quality Ranking
 
 Raw result order is not trusted as final quality. `source_quality.py` classifies URLs into quality bands:
 
@@ -92,7 +104,7 @@ Raw result order is not trusted as final quality. `source_quality.py` classifies
 - vendor docs
 - ordinary web
 
-`kwr brief` and `kwr investigate` use this classification so that official and primary sources are surfaced before generic articles when scores are otherwise close.
+`kwr brief` and `kwr investigate` combine this classification with query overlap, primary-source bonuses, title matches, limited freshness signals, and provider-native boosts. This keeps official docs and primary research from being buried by broad blog results that merely repeat the query terms.
 
 Example verified outcome:
 
@@ -102,7 +114,7 @@ kwr investigate "OpenAI Agents SDK handoffs" --web-limit 3 --read-top 1
 
 The official OpenAI Developers orchestration/handoffs page was ranked ahead of ordinary web/blog results and captured into the archive.
 
-## 5. Page Capture And Reuse
+## 6. Page Capture And Reuse
 
 Search results are volatile. `kwr collect` and `kwr investigate` capture selected pages into SQLite:
 
@@ -121,24 +133,28 @@ kwr query "handoffs" --archive ~/.kwr/research.sqlite
 
 This turns transient search results into reusable local evidence.
 
-## 6. Integrated Investigation
+Investigation reports also include an evidence matrix that shows source class, quality score, capture status, ranking score, and URL for each selected candidate.
+
+## 7. Integrated Investigation
 
 `kwr investigate` is the main workflow command. It performs:
 
-1. web search
-2. local repo evidence lookup
-3. source-quality sorting
-4. selected page capture
-5. SQLite archive write
-6. Markdown investigation report
+1. optional query planning
+2. web search
+3. local repo evidence lookup
+4. source-quality sorting
+5. selected page capture
+6. SQLite archive write
+7. Markdown investigation report
 
 This is the command to use when the goal is "research this well", not just "search this string".
 
-## 7. Agent Access Through MCP
+## 8. Agent Access Through MCP
 
 `kwr mcp` exposes the same functions as MCP tools:
 
 - `kwr.search`
+- `kwr.plan`
 - `kwr.read`
 - `kwr.query`
 - `kwr.repos_query`

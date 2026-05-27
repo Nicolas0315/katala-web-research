@@ -6,16 +6,31 @@ from typing import Any
 
 from .archive import Archive, DEFAULT_ARCHIVE
 from .brief import build_brief
+from .evaluation import build_eval_report, run_eval
 from .investigation import build_investigation_report, sort_web_candidates
 from .models import PageSnapshot
+from .planner import build_search_plan
 from .providers import search
 from .reader import read_url
+from .workflow import search_with_plan
 
 
 PROTOCOL_VERSION = "2025-11-25"
 
 
 TOOLS = [
+    {
+        "name": "kwr.plan",
+        "description": "Decompose a research question into bounded search queries.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+                "max_subqueries": {"type": "integer", "default": 4},
+            },
+            "required": ["query"],
+        },
+    },
     {
         "name": "kwr.search",
         "description": "Search the web with a configured katala-web-research provider.",
@@ -27,6 +42,17 @@ TOOLS = [
                 "limit": {"type": "integer", "default": 5},
             },
             "required": ["query"],
+        },
+    },
+    {
+        "name": "kwr.eval",
+        "description": "Run deterministic research-quality benchmark cases.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "min_score": {"type": "integer", "default": 80},
+                "max_subqueries": {"type": "integer", "default": 4},
+            },
         },
     },
     {
@@ -78,6 +104,8 @@ TOOLS = [
                 "provider": {"type": "string", "default": "ddg"},
                 "web_limit": {"type": "integer", "default": 5},
                 "repo_limit": {"type": "integer", "default": 5},
+                "expand_queries": {"type": "boolean", "default": False},
+                "max_subqueries": {"type": "integer", "default": 4},
                 "no_web": {"type": "boolean", "default": False},
             },
             "required": ["query"],
@@ -96,6 +124,8 @@ TOOLS = [
                 "web_limit": {"type": "integer", "default": 8},
                 "repo_limit": {"type": "integer", "default": 6},
                 "read_top": {"type": "integer", "default": 3},
+                "expand_queries": {"type": "boolean", "default": False},
+                "max_subqueries": {"type": "integer", "default": 4},
                 "no_web": {"type": "boolean", "default": False},
             },
             "required": ["query"],
@@ -130,6 +160,12 @@ def handle_request(request: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def call_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    if name == "kwr.plan":
+        plan = build_search_plan(
+            str(arguments["query"]),
+            max_subqueries=int(arguments.get("max_subqueries", 4)),
+        )
+        return text_result(json.dumps([step.to_dict() for step in plan], ensure_ascii=False, indent=2))
     if name == "kwr.search":
         results = search(
             str(arguments["query"]),
@@ -140,6 +176,12 @@ def call_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
     if name == "kwr.read":
         page = read_url(str(arguments["url"]), reader=str(arguments.get("reader", "auto")))
         return text_result(page.content)
+    if name == "kwr.eval":
+        summary = run_eval(
+            min_score=int(arguments.get("min_score", 80)),
+            max_subqueries=int(arguments.get("max_subqueries", 4)),
+        )
+        return text_result(build_eval_report(summary))
     if name == "kwr.query":
         archive = Archive(str(arguments.get("archive", DEFAULT_ARCHIVE)))
         try:
@@ -158,11 +200,14 @@ def call_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         query = str(arguments["query"])
         archive_path = str(arguments.get("archive", DEFAULT_ARCHIVE))
         web_results = []
+        search_plan = []
         if not bool(arguments.get("no_web", False)):
-            web_results = search(
+            web_results, search_plan = search_with_plan(
                 query,
                 provider=str(arguments.get("provider", "ddg")),
                 limit=int(arguments.get("web_limit", 5)),
+                expand_queries=bool(arguments.get("expand_queries", False)),
+                max_subqueries=int(arguments.get("max_subqueries", 4)),
             )
         archive = Archive(archive_path)
         try:
@@ -170,15 +215,28 @@ def call_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         finally:
             archive.close()
         return text_result(
-            build_brief(query=query, web_results=web_results, repo_hits=repo_hits, archive_path=archive_path)
+            build_brief(
+                query=query,
+                web_results=web_results,
+                repo_hits=repo_hits,
+                archive_path=archive_path,
+                search_plan=search_plan,
+            )
         )
     if name == "kwr.investigate":
         query = str(arguments["query"])
         archive_path = str(arguments.get("archive", DEFAULT_ARCHIVE))
         provider = str(arguments.get("provider", "ddg"))
         web_results = []
+        search_plan = []
         if not bool(arguments.get("no_web", False)):
-            web_results = search(query, provider=provider, limit=int(arguments.get("web_limit", 8)))
+            web_results, search_plan = search_with_plan(
+                query,
+                provider=provider,
+                limit=int(arguments.get("web_limit", 8)),
+                expand_queries=bool(arguments.get("expand_queries", False)),
+                max_subqueries=int(arguments.get("max_subqueries", 4)),
+            )
         archive = Archive(archive_path)
         pages: list[PageSnapshot] = []
         try:
@@ -208,6 +266,7 @@ def call_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 web_results=web_results,
                 repo_hits=repo_hits,
                 pages=pages,
+                search_plan=search_plan,
             )
         )
     raise ValueError(f"unknown tool: {name}")

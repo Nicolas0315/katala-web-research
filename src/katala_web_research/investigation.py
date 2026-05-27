@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .models import PageSnapshot, RepoHit, SearchResult, utc_now_iso
+from .planner import SearchPlanStep, format_search_plan
 from .source_quality import classify_url
 
 
@@ -16,8 +17,10 @@ def build_investigation_report(
     web_results: list[SearchResult],
     repo_hits: list[RepoHit],
     pages: list[PageSnapshot],
+    search_plan: list[SearchPlanStep] | None = None,
 ) -> str:
     sorted_results = sort_web_candidates(web_results)
+    captured_urls = {page.url for page in pages}
     lines = [
         f"# Investigation: {query}",
         "",
@@ -34,9 +37,22 @@ def build_investigation_report(
         "- Use local repository evidence to compare prior art before adopting external behavior.",
         "- Store full-page captures only for selected URLs; keep raw runtime artifacts out of Git.",
         "",
-        "## Best Web Candidates",
-        "",
     ]
+    if search_plan:
+        lines.extend(["## Search Plan", ""])
+        for step in format_search_plan(search_plan):
+            lines.append(f"- {step}")
+        lines.append("")
+    lines.extend(["## Evidence Matrix", ""])
+    if sorted_results:
+        for result in sorted_results:
+            source_type, quality = classify_url(result.url)
+            captured = "yes" if result.url in captured_urls else "no"
+            lines.append(f"- `{source_type}` quality={quality} captured={captured} score={result.score}: {result.url}")
+        lines.append("")
+    else:
+        lines.extend(["No web evidence.", ""])
+    lines.extend(["## Best Web Candidates", ""])
     if sorted_results:
         for result in sorted_results:
             source_type, quality = classify_url(result.url)

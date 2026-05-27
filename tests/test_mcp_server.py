@@ -12,6 +12,8 @@ class McpServerTests(unittest.TestCase):
     def test_tools_list(self):
         response = handle_request({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
         names = {tool["name"] for tool in response["result"]["tools"]}
+        self.assertIn("kwr.plan", names)
+        self.assertIn("kwr.eval", names)
         self.assertIn("kwr.search", names)
         self.assertIn("kwr.repos_query", names)
         self.assertIn("kwr.investigate", names)

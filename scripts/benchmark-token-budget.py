@@ -42,6 +42,34 @@ def main() -> int:
 
         cases = [
             BenchCase(
+                "plan",
+                [
+                    "python3",
+                    "-m",
+                    "katala_web_research.cli",
+                    "plan",
+                    args.query,
+                    "--max-subqueries",
+                    "4",
+                ],
+                350,
+            ),
+            BenchCase(
+                "eval",
+                [
+                    "python3",
+                    "-m",
+                    "katala_web_research.cli",
+                    "eval",
+                    "--min-score",
+                    "80",
+                    "--out",
+                    str(report_dir / "eval.md"),
+                ],
+                900,
+                [report_dir / "eval.md"],
+            ),
+            BenchCase(
                 "repos_scan",
                 [
                     "python3",
@@ -132,6 +160,9 @@ def main() -> int:
                         "2",
                         "--read-top",
                         "1",
+                        "--expand-queries",
+                        "--max-subqueries",
+                        "3",
                         "--out",
                         str(report_dir / "live.md"),
                     ],

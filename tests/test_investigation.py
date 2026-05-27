@@ -34,6 +34,7 @@ class InvestigationTests(unittest.TestCase):
             ],
         )
         self.assertIn("Investigation: web research", report)
+        self.assertIn("Evidence Matrix", report)
         self.assertIn("Captured Pages", report)
         self.assertIn("Search API content", report)
 

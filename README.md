@@ -51,6 +51,12 @@ Search the local archive:
 kwr query "handoff"
 ```
 
+Plan a bounded research search before fetching pages:
+
+```sh
+kwr plan "agentic retrieval source quality" --year 2026
+```
+
 Index local Git repositories into the same archive:
 
 ```sh
@@ -62,18 +68,26 @@ Build a combined brief from web search plus the indexed local corpus:
 
 ```sh
 kwr brief "web research provider architecture" --archive ~/.kwr/research.sqlite --out reports/web-research-provider.md
+kwr brief "web research provider architecture" --expand-queries --archive ~/.kwr/research.sqlite --out reports/web-research-provider.md
 ```
 
 Run a full investigation pass: web search, local repo lookup, selected page capture, archive, and report:
 
 ```sh
 kwr investigate "web research provider architecture" --archive ~/.kwr/research.sqlite --out reports/web-research-provider-investigation.md
+kwr investigate "web research provider architecture" --expand-queries --archive ~/.kwr/research.sqlite --out reports/web-research-provider-investigation.md
 ```
 
 Check provider availability:
 
 ```sh
 kwr doctor
+```
+
+Run deterministic research-quality evaluation:
+
+```sh
+kwr eval --out reports/research-quality.md
 ```
 
 Run the MCP stdio server:
@@ -114,6 +128,7 @@ The command is designed for a local repository corpus such as `~/Documents/GitHu
 
 The stdio server exposes:
 
+- `kwr.plan`
 - `kwr.search`
 - `kwr.read`
 - `kwr.query`
@@ -140,6 +155,8 @@ Completion evidence is tracked in [docs/completion-audit.md](docs/completion-aud
 - [docs/search-capability.md](docs/search-capability.md): how search quality is improved.
 - [docs/research-flow.md](docs/research-flow.md): research workflow and flowchart.
 - [docs/operations.md](docs/operations.md): routine operation and token-budget benchmarks.
+- [docs/rl-and-evaluation.md](docs/rl-and-evaluation.md): reinforcement-learning path and reward design.
+- [docs/research-quality-benchmark.md](docs/research-quality-benchmark.md): benchmark log.
 - [docs/design.md](docs/design.md): architecture and contracts.
 - [docs/source-evidence.md](docs/source-evidence.md): source evidence and implementation decisions.
 - [docs/mcp-config-examples.md](docs/mcp-config-examples.md): MCP client configuration examples.

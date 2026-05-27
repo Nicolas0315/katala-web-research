@@ -18,7 +18,22 @@ class RankTests(unittest.TestCase):
         self.assertEqual(len(ranked), 2)
         self.assertGreater(ranked[0].score, ranked[1].score)
 
+    def test_ranking_rewards_primary_sources_and_freshness(self):
+        results = [
+            SearchResult(title="Agentic retrieval overview", url="https://example.com/post", rank=1),
+            SearchResult(
+                title="Agentic retrieval paper",
+                url="https://arxiv.org/abs/2603.13853",
+                snippet="agentic retrieval evaluation",
+                published_at="2026-03-14",
+                rank=2,
+            ),
+        ]
+
+        ranked = rank_results("agentic retrieval evaluation", results)
+
+        self.assertEqual(ranked[0].url, "https://arxiv.org/abs/2603.13853")
+
 
 if __name__ == "__main__":
     unittest.main()
-

@@ -6,17 +6,19 @@ Use this as the operator flow for high-signal web research.
 
 ```mermaid
 flowchart TD
-    A[Start: research question] --> B[Refresh local corpus]
+    A[Start: research question] --> P[Plan bounded subqueries]
+    P --> P1[kwr plan query]
+    P1 --> B[Refresh local corpus]
     B --> B1[kwr repos scan ~/Documents/GitHub]
     B1 --> C[Run integrated investigation]
-    C --> C1[kwr investigate query]
+    C --> C1[kwr investigate query --expand-queries]
 
-    C1 --> D[Web provider search]
+    C1 --> D[Web provider search over planned queries]
     C1 --> E[Local repo FTS query]
 
     D --> D1[Normalize SearchResult]
     D1 --> D2[Classify source quality]
-    D2 --> D3[Sort official and primary sources first]
+    D2 --> D3[Merge, dedupe, rerank candidates]
 
     E --> E1[README / AGENTS / Skill / manifests]
     E1 --> E2[RepoHit local evidence]
@@ -52,6 +54,7 @@ Run a full investigation:
 ```sh
 kwr investigate "OpenAI Agents SDK handoffs" \
   --archive ~/.kwr/research.sqlite \
+  --expand-queries \
   --web-limit 8 \
   --repo-limit 6 \
   --read-top 3 \

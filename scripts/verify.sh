@@ -14,6 +14,13 @@ echo "== cli smoke =="
 PYTHONPATH=src python3 -m katala_web_research.cli doctor >/tmp/katala-web-research-doctor.txt
 grep -q "sqlite_fts5: ok" /tmp/katala-web-research-doctor.txt
 rm -f /tmp/katala-web-research-doctor.txt
+PYTHONPATH=src python3 -m katala_web_research.cli plan "agentic retrieval source quality" --max-subqueries 2 >/tmp/katala-web-research-plan.txt
+grep -q "official:" /tmp/katala-web-research-plan.txt
+rm -f /tmp/katala-web-research-plan.txt
+PYTHONPATH=src python3 -m katala_web_research.cli eval --min-score 80 --out /tmp/katala-web-research-eval.md >/tmp/katala-web-research-eval.txt
+grep -q "passed: true" /tmp/katala-web-research-eval.txt
+grep -q "Research Quality Benchmark" /tmp/katala-web-research-eval.md
+rm -f /tmp/katala-web-research-eval.txt /tmp/katala-web-research-eval.md
 
 echo "== token budget benchmark =="
 scripts/benchmark-token-budget.py

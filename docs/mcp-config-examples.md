@@ -3,10 +3,13 @@
 These examples expose the same local-first research tools to agent clients:
 
 - `kwr.search`
+- `kwr.plan`
+- `kwr.eval`
 - `kwr.read`
 - `kwr.query`
 - `kwr.repos_query`
 - `kwr.brief`
+- `kwr.investigate`
 
 ## Codex
 

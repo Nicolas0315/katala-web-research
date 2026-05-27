@@ -13,11 +13,12 @@ scripts/kwr-research-cycle.sh "OpenAI Agents SDK handoffs"
 It performs:
 
 1. incremental scan of `~/Documents/GitHub`
-2. web search
-3. local repository evidence lookup
-4. selected page capture
-5. SQLite archive write
-6. Markdown investigation report
+2. bounded query decomposition
+3. web search
+4. local repository evidence lookup
+5. selected page capture
+6. SQLite archive write
+7. Markdown investigation report
 
 Defaults:
 
@@ -28,6 +29,7 @@ Defaults:
 - web results: 8
 - repo hits: 6
 - captured pages: 2
+- expanded queries: enabled
 
 ## Useful Overrides
 
@@ -39,6 +41,12 @@ scripts/kwr-research-cycle.sh "browser automation research" reports/browser-auto
 ```sh
 KWR_PROVIDER=github KWR_READ_TOP=0 \
 scripts/kwr-research-cycle.sh "agent research tools"
+```
+
+Disable query decomposition when you need a single exact query:
+
+```sh
+KWR_EXPAND_QUERIES=0 scripts/kwr-research-cycle.sh "exact release title"
 ```
 
 ## Token Budget Benchmark
@@ -66,6 +74,7 @@ The benchmark estimates tokens from emitted text and generated reports. It fails
 ## Output Discipline
 
 - Prefer `--out <file>` for `brief` and `investigate`; stdout stays short.
+- Use `kwr plan` before expensive investigations when you want to inspect the fan-out.
 - Keep `--read-top` small, usually `1-3`.
 - Use `kwr query` for follow-up retrieval instead of re-running large web captures.
 - Use `kwr repos scan` incrementally before important research.
@@ -76,4 +85,5 @@ The benchmark estimates tokens from emitted text and generated reports. It fails
 ```sh
 scripts/verify.sh
 scripts/benchmark-token-budget.py
+PYTHONPATH=src python3 -m katala_web_research.cli eval --out /tmp/kwr-eval.md
 ```

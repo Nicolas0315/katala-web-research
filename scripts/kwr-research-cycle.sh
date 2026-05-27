@@ -17,6 +17,7 @@ Environment:
   KWR_WEB_LIMIT       Web search result count. Default: 8
   KWR_REPO_LIMIT      Local repo result count. Default: 6
   KWR_READ_TOP        Number of top web pages to capture. Default: 2
+  KWR_EXPAND_QUERIES  Use bounded query decomposition. Default: 1
   KWR_PROVIDER        Search provider. Default: ddg
   KWR_READER          Reader. Default: auto
 
@@ -38,6 +39,7 @@ max_files="${KWR_MAX_FILES:-40}"
 web_limit="${KWR_WEB_LIMIT:-8}"
 repo_limit="${KWR_REPO_LIMIT:-6}"
 read_top="${KWR_READ_TOP:-2}"
+expand_queries="${KWR_EXPAND_QUERIES:-1}"
 provider="${KWR_PROVIDER:-ddg}"
 reader="${KWR_READER:-auto}"
 
@@ -50,6 +52,10 @@ else
 fi
 
 mkdir -p "$(dirname "$archive")" "$(dirname "$out")"
+expand_args=()
+if [ "$expand_queries" != "0" ]; then
+  expand_args=(--expand-queries)
+fi
 
 echo "== refresh local corpus =="
 PYTHONPATH=src python3 -m katala_web_research.cli repos scan "$repo_root" \
@@ -65,6 +71,7 @@ PYTHONPATH=src python3 -m katala_web_research.cli investigate "$query" \
   --web-limit "$web_limit" \
   --repo-limit "$repo_limit" \
   --read-top "$read_top" \
+  "${expand_args[@]}" \
   --out "$out"
 
 echo "archive: $archive"
