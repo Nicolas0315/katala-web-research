@@ -162,6 +162,7 @@ Completion evidence is tracked in [docs/completion-audit.md](docs/completion-aud
 - [docs/rl-and-evaluation.md](docs/rl-and-evaluation.md): reinforcement-learning path and reward design.
 - [docs/research-quality-benchmark.md](docs/research-quality-benchmark.md): benchmark log.
 - [docs/metasearch-engine-design.md](docs/metasearch-engine-design.md): SearXNG-inspired Katala metasearch design.
+- [docs/metasearch-enhancement-research-2026-05-27.md](docs/metasearch-enhancement-research-2026-05-27.md): next OSS techniques to strengthen metasearch.
 - [docs/design.md](docs/design.md): architecture and contracts.
 - [docs/source-evidence.md](docs/source-evidence.md): source evidence and implementation decisions.
 - [docs/mcp-config-examples.md](docs/mcp-config-examples.md): MCP client configuration examples.
