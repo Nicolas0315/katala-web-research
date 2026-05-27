@@ -7,14 +7,14 @@
 - collect top results into a SQLite archive with FTS5 search
 - produce a small evidence report that is easy to commit, review, or hand off
 
-It borrows the useful shape from local repos already on this machine:
+It borrows the useful shape from local-first research and crawler patterns:
 
 - `Agent-Reach`: small channel/provider contracts and Jina Reader as a clean web reader
 - `x-tweet-fetcher`: no-key search fallback thinking and browser-free first pass
 - `supacrawl`: local SQLite archive plus fast search
 - `agent-research`: source evidence and verification discipline
 
-`/Users/s30519/Documents/GitHub` is supported through `kwr repos scan`; start with bounded scans before indexing the full corpus.
+`~/Documents/GitHub` is supported through `kwr repos scan`; start with bounded scans before indexing the full corpus.
 
 ## Install For Local Development
 
@@ -54,7 +54,7 @@ kwr query "handoff"
 Index local Git repositories into the same archive:
 
 ```sh
-kwr repos scan /Users/s30519/Documents/GitHub --archive ~/.kwr/research.sqlite
+kwr repos scan ~/Documents/GitHub --archive ~/.kwr/research.sqlite
 kwr repos query "web research provider" --archive ~/.kwr/research.sqlite
 ```
 
@@ -104,7 +104,7 @@ The CLI never writes those values into archives, reports, logs, or config files.
 
 `kwr repos scan` indexes README, AGENTS, Skill files, project manifests, and small text docs from Git repositories under a root path. It skips `.git`, `node_modules`, caches, raw downloads, logs, sessions, build outputs, and vendored directories.
 
-The command is designed for `/Users/s30519/Documents/GitHub`, but also works with any readable repository folder. If macOS blocks that folder with TCC permissions, grant terminal access and rerun the same command; no code change is needed.
+The command is designed for a local repository corpus such as `~/Documents/GitHub`, but also works with any readable repository folder. If macOS blocks that folder with TCC permissions, grant terminal access and rerun the same command; no code change is needed.
 
 ## Research Briefs
 

@@ -1,25 +1,25 @@
 # Source Evidence
 
 - retrieved_at: 2026-05-27
-- local root: `/Users/s30519/work/katala-web-research`
+- local root: `katala-web-research`
 
 ## Local Repos
 
-- `/Users/s30519/work/Agent-Reach`: channel-style provider split, Jina Reader URL reading, Exa/mcporter optional search posture.
-- `/Users/s30519/work/x-tweet-fetcher`: no-key web search fallback strategy and direct HTTP/browser separation.
-- `/Users/s30519/work/supacrawl`: local SQLite archive and FTS-oriented inspection flow.
-- `/Users/s30519/work/agent-research`: source evidence, raw artifact guard, and verification pattern.
+- `Agent-Reach`: channel-style provider split, Jina Reader URL reading, Exa/mcporter optional search posture.
+- `x-tweet-fetcher`: no-key web search fallback strategy and direct HTTP/browser separation.
+- `supacrawl`: local SQLite archive and FTS-oriented inspection flow.
+- `agent-research`: source evidence, raw artifact guard, and verification pattern.
 
-`/Users/s30519/Documents/GitHub` was requested as an input corpus. It was readable on the continuation pass on 2026-05-27. A bounded scan verified the adapter against 3 repos and 14 indexed documents:
+The local GitHub checkout folder was requested as an input corpus. It was readable on the continuation pass on 2026-05-27. A bounded scan verified the adapter against 3 repos and 14 indexed documents:
 
-- `/Users/s30519/Documents/GitHub/firefox`
-- `/Users/s30519/Documents/GitHub/issuebot`
-- `/Users/s30519/Documents/GitHub/prompts.chat`
+- `firefox`
+- `issuebot`
+- `prompts.chat`
 
 Verification commands:
 
 ```sh
-PYTHONPATH=src python3 -m katala_web_research.cli repos scan /Users/s30519/Documents/GitHub --archive /tmp/kwr-documents-github-head.sqlite --max-repos 3 --max-files-per-repo 5 --json
+PYTHONPATH=src python3 -m katala_web_research.cli repos scan ~/Documents/GitHub --archive /tmp/kwr-documents-github-head.sqlite --max-repos 3 --max-files-per-repo 5 --json
 PYTHONPATH=src python3 -m katala_web_research.cli repos query prompt --archive /tmp/kwr-documents-github-head.sqlite --limit 5
 PYTHONPATH=src python3 -m katala_web_research.cli brief prompt --archive /tmp/kwr-documents-github-head.sqlite --no-web --repo-limit 3 --out /tmp/kwr-documents-github-brief.md
 ```

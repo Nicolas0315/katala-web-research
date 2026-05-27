@@ -1,11 +1,11 @@
 # Completion Audit
 
 - audited_at: 2026-05-27
-- project: `/Users/s30519/work/katala-web-research`
+- project: `katala-web-research`
 
 ## Objective
 
-Build and design a GitHub-manageable mechanism that strengthens web handling for research and investigation, applies repositories under `/Users/s30519/Documents/GitHub`, uses web search, and improves access to the best information.
+Build and design a GitHub-manageable mechanism that strengthens web handling for research and investigation, applies repositories under a local GitHub checkout folder, uses web search, and improves access to the best information.
 
 ## Requirement Evidence
 
@@ -35,7 +35,7 @@ Observed result:
 - captured one page through `jina-reader`
 - local archive query found the captured handoffs page
 
-### `/Users/s30519/Documents/GitHub` Applied As Local Prior-Art Corpus
+### Local GitHub Checkout Folder Applied As Prior-Art Corpus
 
 Status: satisfied for bounded and repeatable scans
 
@@ -49,8 +49,8 @@ Evidence:
 Verification:
 
 ```sh
-PYTHONPATH=src python3 -m katala_web_research.cli repos scan /Users/s30519/Documents/GitHub --archive /tmp/kwr-incremental3.sqlite --max-repos 3 --max-files-per-repo 5 --json
-PYTHONPATH=src python3 -m katala_web_research.cli repos scan /Users/s30519/Documents/GitHub --archive /tmp/kwr-incremental3.sqlite --max-repos 3 --max-files-per-repo 5 --json
+PYTHONPATH=src python3 -m katala_web_research.cli repos scan ~/Documents/GitHub --archive /tmp/kwr-incremental3.sqlite --max-repos 3 --max-files-per-repo 5 --json
+PYTHONPATH=src python3 -m katala_web_research.cli repos scan ~/Documents/GitHub --archive /tmp/kwr-incremental3.sqlite --max-repos 3 --max-files-per-repo 5 --json
 ```
 
 Observed result:
@@ -148,4 +148,3 @@ These are useful follow-ups, not blockers for the objective:
 - add stronger citation quality scoring with retrieval freshness
 - add dashboard only if CLI/MCP workflow is insufficient
 - publish to GitHub once commit/push/repo creation are explicitly requested
-

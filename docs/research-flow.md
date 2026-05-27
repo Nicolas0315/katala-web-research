@@ -7,7 +7,7 @@ Use this as the operator flow for high-signal web research.
 ```mermaid
 flowchart TD
     A[Start: research question] --> B[Refresh local corpus]
-    B --> B1[kwr repos scan /Users/s30519/Documents/GitHub]
+    B --> B1[kwr repos scan ~/Documents/GitHub]
     B1 --> C[Run integrated investigation]
     C --> C1[kwr investigate query]
 
@@ -44,7 +44,7 @@ flowchart TD
 Refresh the local corpus:
 
 ```sh
-kwr repos scan /Users/s30519/Documents/GitHub --archive ~/.kwr/research.sqlite --max-repos 200 --max-files-per-repo 40
+kwr repos scan ~/Documents/GitHub --archive ~/.kwr/research.sqlite --max-repos 200 --max-files-per-repo 40
 ```
 
 Run a full investigation:
@@ -87,4 +87,3 @@ Before relying on a result:
 - captured page exists for any important web claim
 - archive path is recorded
 - report was generated after the latest relevant corpus scan
-

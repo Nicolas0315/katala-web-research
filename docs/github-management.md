@@ -5,7 +5,7 @@ This project is ready to manage as a standalone GitHub repository.
 ## Suggested First Publication
 
 ```sh
-cd /Users/s30519/work/katala-web-research
+cd katala-web-research
 git init
 git add .
 git status --short
@@ -30,7 +30,7 @@ Completion evidence lives in `docs/completion-audit.md`.
 
 ```sh
 PYTHONPATH=src python3 -m katala_web_research.cli repos scan \
-  /Users/s30519/Documents/GitHub \
+  ~/Documents/GitHub \
   --archive ~/.kwr/research.sqlite \
   --max-repos 200 \
   --max-files-per-repo 40

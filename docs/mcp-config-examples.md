@@ -22,7 +22,7 @@ args = [
 ]
 
 [mcp_servers.katala_web_research.env]
-PYTHONPATH = "/Users/s30519/work/katala-web-research/src"
+PYTHONPATH = "/path/to/katala-web-research/src"
 KWR_SEARXNG_URL = "http://127.0.0.1:8080"
 ```
 
@@ -33,7 +33,7 @@ Add `BRAVE_SEARCH_API_KEY` or `JINA_API_KEY` only through your normal secret man
 Use the same stdio command when a client asks for an MCP server command:
 
 ```sh
-PYTHONPATH=/Users/s30519/work/katala-web-research/src \
+PYTHONPATH=/path/to/katala-web-research/src \
 python3 -m katala_web_research.cli mcp
 ```
 
@@ -45,7 +45,7 @@ For clients that accept JSON-style MCP server definitions, use this shape and ad
     "command": "python3",
     "args": ["-m", "katala_web_research.cli", "mcp"],
     "env": {
-      "PYTHONPATH": "/Users/s30519/work/katala-web-research/src",
+      "PYTHONPATH": "/path/to/katala-web-research/src",
       "KWR_SEARXNG_URL": "http://127.0.0.1:8080"
     }
   }
@@ -60,4 +60,3 @@ The server speaks MCP-style framed JSON-RPC over stdio. The normal verification 
 scripts/verify.sh
 PYTHONPATH=src python3 -m katala_web_research.cli doctor
 ```
-

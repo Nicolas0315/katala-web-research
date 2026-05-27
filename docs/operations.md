@@ -12,7 +12,7 @@ scripts/kwr-research-cycle.sh "OpenAI Agents SDK handoffs"
 
 It performs:
 
-1. incremental scan of `/Users/s30519/Documents/GitHub`
+1. incremental scan of `~/Documents/GitHub`
 2. web search
 3. local repository evidence lookup
 4. selected page capture
@@ -52,13 +52,13 @@ scripts/benchmark-token-budget.py
 Run against the real `Documents/GitHub` corpus:
 
 ```sh
-scripts/benchmark-token-budget.py --root /Users/s30519/Documents/GitHub
+scripts/benchmark-token-budget.py --root ~/Documents/GitHub
 ```
 
 Run the optional live web benchmark:
 
 ```sh
-scripts/benchmark-token-budget.py --root /Users/s30519/Documents/GitHub --live-web
+scripts/benchmark-token-budget.py --root ~/Documents/GitHub --live-web
 ```
 
 The benchmark estimates tokens from emitted text and generated reports. It fails when output exceeds the defined budget. This is a practical guard against accidentally dumping full captured pages or huge JSON payloads into agent context.
@@ -77,4 +77,3 @@ The benchmark estimates tokens from emitted text and generated reports. It fails
 scripts/verify.sh
 scripts/benchmark-token-budget.py
 ```
-

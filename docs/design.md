@@ -97,7 +97,7 @@ The local corpus scanner finds Git repositories under a root and indexes small, 
 - `pyproject.toml`, `package.json`, `go.mod`, `Cargo.toml`
 - small `.md`, `.txt`, `.rst`, `.toml`, `.json`, `.yaml`, `.yml` docs
 
-It skips `.git`, dependency folders, caches, build outputs, raw downloads, logs, and sessions. This makes `/Users/s30519/Documents/GitHub` useful as a research prior-art corpus without copying entire repos or private runtime artifacts into Git.
+It skips `.git`, dependency folders, caches, build outputs, raw downloads, logs, and sessions. This makes a local repository corpus such as `~/Documents/GitHub` useful as research prior art without copying entire repos or private runtime artifacts into Git.
 
 Subsequent scans skip unchanged files by comparing stored size, mtime, and SHA-256 metadata. This keeps a large `Documents/GitHub` corpus practical for repeated research refreshes.
 
@@ -105,7 +105,7 @@ Subsequent scans skip unchanged files by comparing stored size, mtime, and SHA-2
 
 - No browser automation in MVP.
 - No authenticated social scraping in MVP.
-- `/Users/s30519/Documents/GitHub` is readable in the current session, but full scans can be large. Use bounded `--max-repos` and `--max-files-per-repo` first.
+- A local repository corpus can be large. Use bounded `--max-repos` and `--max-files-per-repo` first.
 - Search result freshness is only provider metadata plus ranking, not a full temporal verifier.
 - Source quality scoring is heuristic; final claims still need source review.
 

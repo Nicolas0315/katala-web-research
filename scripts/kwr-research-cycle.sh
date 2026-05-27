@@ -11,7 +11,7 @@ Usage:
 
 Environment:
   KWR_ARCHIVE         SQLite archive path. Default: ~/.kwr/research.sqlite
-  KWR_REPO_ROOT       Local repository corpus root. Default: /Users/s30519/Documents/GitHub
+  KWR_REPO_ROOT       Local repository corpus root. Default: $HOME/Documents/GitHub
   KWR_MAX_REPOS       Bounded repo scan count. Default: 200
   KWR_MAX_FILES       Files per repo. Default: 40
   KWR_WEB_LIMIT       Web search result count. Default: 8
@@ -32,7 +32,7 @@ fi
 
 query="$1"
 archive="${KWR_ARCHIVE:-$HOME/.kwr/research.sqlite}"
-repo_root="${KWR_REPO_ROOT:-/Users/s30519/Documents/GitHub}"
+repo_root="${KWR_REPO_ROOT:-$HOME/Documents/GitHub}"
 max_repos="${KWR_MAX_REPOS:-200}"
 max_files="${KWR_MAX_FILES:-40}"
 web_limit="${KWR_WEB_LIMIT:-8}"
@@ -69,4 +69,3 @@ PYTHONPATH=src python3 -m katala_web_research.cli investigate "$query" \
 
 echo "archive: $archive"
 echo "report: $out"
-

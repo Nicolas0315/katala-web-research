@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import shlex
 import subprocess
 from hashlib import sha256
 from pathlib import Path
@@ -177,16 +176,11 @@ def find_git_repos_direct_children(
 
 
 def find_git_repos_with_find(root: Path, *, max_repos: int) -> tuple[list[Path], list[str]]:
-    cmd = (
-        f"/usr/bin/find {shlex.quote(str(root))} -maxdepth 2 -name .git -type d "
-        f"| /usr/bin/head -n {int(max_repos)}"
-    )
     repos: list[Path] = []
     warnings: list[str] = []
     try:
         completed = subprocess.run(
-            cmd,
-            shell=True,
+            ["/usr/bin/find", str(root), "-maxdepth", "2", "-name", ".git", "-type", "d"],
             text=True,
             capture_output=True,
             timeout=20,
@@ -194,7 +188,7 @@ def find_git_repos_with_find(root: Path, *, max_repos: int) -> tuple[list[Path],
         )
     except (OSError, subprocess.TimeoutExpired):
         return [], []
-    for line in completed.stdout.splitlines():
+    for line in completed.stdout.splitlines()[:max_repos]:
         git_dir = Path(line.strip())
         if git_dir:
             repos.append(git_dir.parent)

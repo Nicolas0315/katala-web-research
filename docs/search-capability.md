@@ -41,7 +41,7 @@ This lets the rest of the system rank, archive, and report results without carin
 `kwr repos scan` turns local Git repositories into a searchable prior-art corpus. The intended high-value root is:
 
 ```sh
-/Users/s30519/Documents/GitHub
+~/Documents/GitHub
 ```
 
 The scanner indexes small, reviewable files:
@@ -157,4 +157,3 @@ The system improves retrieval and evidence handling, but final claims still need
 - authenticated/social scraping is intentionally out of scope
 
 The safe pattern is: search broadly, rank sources, capture selected pages, compare against local corpus, then verify claims before publication.
-

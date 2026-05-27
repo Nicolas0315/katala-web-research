@@ -1,7 +1,5 @@
 # katala-web-research
 
-@/Users/s30519/work/agent-context/AGENTS.MD
-
 ## Project Delta
 
 - This repository is a local-first web research access toolkit.
@@ -17,4 +15,3 @@ Run:
 ```sh
 scripts/verify.sh
 ```
-
