@@ -3,6 +3,7 @@ from __future__ import annotations
 from urllib.parse import urlparse
 
 from .models import SearchResult
+from .source_registry import source_registry
 
 
 OFFICIAL_DOC_HOSTS = {
@@ -10,6 +11,7 @@ OFFICIAL_DOC_HOSTS = {
     "developers.openai.com",
     "platform.openai.com",
     "docs.anthropic.com",
+    "docs.python.org",
     "ai.google.dev",
     "cloud.google.com",
     "learn.microsoft.com",
@@ -29,6 +31,10 @@ ACCOUNTABLE_HOST_SUFFIXES = (".edu", ".gov")
 
 
 def classify_url(url: str) -> tuple[str, int]:
+    registry_source = source_registry().match_url(url)
+    if registry_source is not None:
+        return registry_source.source_type, registry_source.trust_score
+
     host = urlparse(url).netloc.lower().removeprefix("www.")
     if host in OFFICIAL_DOC_HOSTS:
         return "official-docs", 100

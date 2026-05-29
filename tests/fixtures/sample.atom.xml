@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Katala Atom</title>
+  <entry>
+    <title>Atom source monitoring</title>
+    <link href="https://example.com/atom-monitoring" />
+    <summary>Monitoring official feeds before broad web search.</summary>
+    <updated>2026-05-27T13:30:00Z</updated>
+  </entry>
+</feed>

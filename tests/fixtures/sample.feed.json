@@ -1,0 +1,13 @@
+{
+  "version": "https://jsonfeed.org/version/1.1",
+  "title": "Katala JSON Feed",
+  "items": [
+    {
+      "id": "json-1",
+      "url": "https://example.com/json-feed-provider",
+      "title": "JSON feed provider",
+      "summary": "Feed provider fixture for local search.",
+      "date_published": "2026-05-27T14:00:00Z"
+    }
+  ]
+}

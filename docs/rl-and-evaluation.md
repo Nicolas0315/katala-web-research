@@ -82,6 +82,19 @@ Recommended penalties:
 - top source-quality band
 - discouraged source ordering
 
+The deterministic suite now covers these domain categories:
+
+- platform API docs
+- AI vendor docs
+- scholarly research
+- metasearch fusion
+- bias-aware news comparison
+- feed monitoring
+- security advisories
+- legal/regulatory guidance
+- open-source implementation research
+- product release freshness
+
 This is intentionally small and deterministic. It is a regression gate, not a full relevance benchmark.
 
 ## Next Learning Step

@@ -4,11 +4,14 @@ import json
 import os
 import shutil
 import subprocess
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import asdict, dataclass, replace
 from html.parser import HTMLParser
 from typing import Protocol
 from urllib.parse import quote_plus, urlencode
 
+from .archive import Archive, DEFAULT_ARCHIVE
 from .fusion import fuse_and_rank
 from .http import FetchError, fetch_url
 from .models import SearchResult
@@ -106,6 +109,35 @@ class GitHubRepoSearch:
                 )
             )
         return results
+
+
+class FeedSearch:
+    name = "feed"
+
+    def search(self, query: str, *, limit: int = 10) -> list[SearchResult]:
+        archive = Archive(os.environ.get("KWR_ARCHIVE", str(DEFAULT_ARCHIVE)))
+        try:
+            hits = archive.query_feeds(query, limit=limit)
+        finally:
+            archive.close()
+        results = [
+            SearchResult(
+                title=hit.title,
+                url=hit.url,
+                snippet=hit.snippet,
+                source=self.name,
+                published_at=hit.published_at,
+                rank=idx,
+                metadata={
+                    "source_url": hit.source_url,
+                    "source_title": hit.source_title,
+                    "fetched_at": hit.fetched_at,
+                    "archive_rank": hit.rank,
+                },
+            )
+            for idx, hit in enumerate(hits, start=1)
+        ]
+        return rank_results(query, results)
 
 
 class JinaSearch:
@@ -249,26 +281,66 @@ class MetaSearch:
 
     def search(self, query: str, *, limit: int = 10) -> list[SearchResult]:
         profile = _meta_profile()
-        providers = _meta_provider_names(profile)
-        if not providers:
+        provider_names = [name for name in _meta_provider_names(profile) if name in PROVIDERS]
+        if not provider_names:
             return []
         result_lists: list[list[SearchResult]] = []
-        with ThreadPoolExecutor(max_workers=min(len(providers), 4)) as executor:
+        runs: list[_MetaEngineRun] = []
+        per_engine_limit = max(2, min(limit, 8))
+        with ThreadPoolExecutor(max_workers=min(len(provider_names), 4)) as executor:
             futures = {
                 executor.submit(
-                    get_provider(name).search,
+                    _run_meta_provider,
+                    name,
                     _rewrite_query_for_provider(query, provider=name, profile=profile),
-                    limit=max(2, min(limit, 8)),
+                    per_engine_limit,
                 ): name
-                for name in providers
-                if name in PROVIDERS
+                for name in provider_names
             }
             for future in as_completed(futures):
                 try:
-                    result_lists.append(future.result())
-                except Exception:
-                    continue
-        return fuse_and_rank(query, result_lists, limit=limit)
+                    results, run = future.result()
+                except Exception as exc:
+                    run = _MetaEngineRun(
+                        provider=futures[future],
+                        status="error",
+                        latency_ms=0,
+                        result_count=0,
+                        health_score=0.0,
+                        error_kind=exc.__class__.__name__,
+                    )
+                    results = []
+                runs.append(run)
+                if results:
+                    result_lists.append(results)
+        ranked = fuse_and_rank(
+            query,
+            result_lists,
+            limit=limit,
+            engine_health={run.provider: run.health_score for run in runs},
+        )
+        return [
+            _annotate_meta_result(
+                result,
+                profile=profile,
+                provider_names=provider_names,
+                runs=runs,
+            )
+            for result in ranked
+        ]
+
+
+@dataclass(slots=True, frozen=True)
+class _MetaEngineRun:
+    provider: str
+    status: str
+    latency_ms: int
+    result_count: int
+    health_score: float
+    error_kind: str = ""
+
+    def to_dict(self) -> dict[str, str | int | float]:
+        return asdict(self)
 
 
 META_PROFILES: dict[str, tuple[str, ...]] = {
@@ -277,19 +349,105 @@ META_PROFILES: dict[str, tuple[str, ...]] = {
     "scholarly": ("openalex", "searxng", "ddg"),
     "code": ("github", "searxng", "ddg"),
     "fresh": ("ddg", "searxng", "brave"),
-    "local": ("ddg", "github"),
+    "local": ("feed", "ddg", "github"),
+    "monitoring": ("feed", "ddg", "github"),
 }
 
 
 PROVIDERS: dict[str, SearchProvider] = {
     "brave": BraveSearch(),
     "ddg": DuckDuckGoSearch(),
+    "feed": FeedSearch(),
     "github": GitHubRepoSearch(),
     "meta": MetaSearch(),
     "openalex": OpenAlexSearch(),
     "jina": JinaSearch(),
     "searxng": SearxngSearch(),
 }
+
+
+def _run_meta_provider(
+    provider: str, rewritten_query: str, limit: int
+) -> tuple[list[SearchResult], _MetaEngineRun]:
+    started = time.perf_counter()
+    try:
+        results = get_provider(provider).search(rewritten_query, limit=limit)
+        latency_ms = _elapsed_ms(started)
+        status = "ok" if results else "empty"
+        run = _MetaEngineRun(
+            provider=provider,
+            status=status,
+            latency_ms=latency_ms,
+            result_count=len(results),
+            health_score=_meta_engine_health_score(
+                status=status,
+                result_count=len(results),
+                latency_ms=latency_ms,
+                requested=limit,
+            ),
+        )
+        return [_annotate_engine_result(result, run) for result in results], run
+    except Exception as exc:
+        latency_ms = _elapsed_ms(started)
+        run = _MetaEngineRun(
+            provider=provider,
+            status="error",
+            latency_ms=latency_ms,
+            result_count=0,
+            health_score=0.0,
+            error_kind=exc.__class__.__name__,
+        )
+        return [], run
+
+
+def _annotate_engine_result(result: SearchResult, run: _MetaEngineRun) -> SearchResult:
+    metadata = dict(result.metadata)
+    metadata["engine_health_score"] = run.health_score
+    metadata["engine_latency_ms"] = run.latency_ms
+    metadata["engine_result_count"] = run.result_count
+    return replace(result, metadata=metadata)
+
+
+def _annotate_meta_result(
+    result: SearchResult,
+    *,
+    profile: str,
+    provider_names: list[str],
+    runs: list[_MetaEngineRun],
+) -> SearchResult:
+    metadata = dict(result.metadata)
+    metadata["meta_profile"] = profile
+    metadata["meta_providers"] = list(provider_names)
+    metadata["meta_engine_runs"] = [
+        run.to_dict() for run in sorted(runs, key=lambda item: item.provider)
+    ]
+    return replace(result, metadata=metadata)
+
+
+def _elapsed_ms(started: float) -> int:
+    return max(0, round((time.perf_counter() - started) * 1000))
+
+
+def _meta_engine_health_score(
+    *,
+    status: str,
+    result_count: int,
+    latency_ms: int,
+    requested: int,
+) -> float:
+    if status == "error":
+        return 0.0
+    if status == "empty":
+        return 0.35
+    useful_ratio = min(result_count / max(requested, 1), 1.0)
+    score = 0.75 + 0.25 * useful_ratio
+    if latency_ms >= 5_000:
+        score -= 0.25
+    elif latency_ms >= 2_000:
+        score -= 0.15
+    elif latency_ms >= 1_000:
+        score -= 0.05
+    return round(max(0.1, min(score, 1.0)), 3)
 
 
 def get_provider(name: str) -> SearchProvider:
@@ -306,6 +464,11 @@ def search(query: str, *, provider: str = "ddg", limit: int = 10) -> list[Search
 def provider_status() -> list[dict[str, str]]:
     return [
         {"provider": "ddg", "status": "ok", "detail": "no-key HTML search fallback"},
+        {
+            "provider": "feed",
+            "status": "ok",
+            "detail": "local RSS/Atom/JSON Feed archive; set KWR_ARCHIVE to override path",
+        },
         {"provider": "github", "status": "ok", "detail": "gh CLI or GitHub REST; GITHUB_TOKEN optional"},
         {
             "provider": "jina",
@@ -330,7 +493,7 @@ def provider_status() -> list[dict[str, str]]:
         {
             "provider": "meta",
             "status": "ok",
-            "detail": f"local metasearch fan-out; profile={_meta_profile()} providers={','.join(_meta_provider_names(_meta_profile()))}",
+            "detail": f"health-aware metasearch fan-out; profile={_meta_profile()} providers={','.join(_meta_provider_names(_meta_profile()))}",
         },
     ]
 

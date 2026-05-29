@@ -20,3 +20,5 @@ katala-web-research = "katala_web_research.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+katala_web_research = ["data/*.json"]

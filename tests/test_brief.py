@@ -42,7 +42,26 @@ class BriefTests(unittest.TestCase):
         self.assertIn("official-docs", brief)
         self.assertIn("Local Repository Evidence", brief)
 
+    def test_brief_includes_registry_caveat_for_matched_source(self):
+        brief = build_brief(
+            query="security priority",
+            web_results=[
+                SearchResult(
+                    title="CISA KEV",
+                    url="https://www.cisa.gov/known-exploited-vulnerabilities-catalog",
+                    snippet="Known exploited vulnerabilities",
+                    source="ddg",
+                    rank=1,
+                    score=2.0,
+                )
+            ],
+            repo_hits=[],
+            archive_path="archive.sqlite",
+        )
+
+        self.assertIn("registry_source: CISA Known Exploited Vulnerabilities Catalog", brief)
+        self.assertIn("bias_caveat: US government operational perspective", brief)
+
 
 if __name__ == "__main__":
     unittest.main()
-

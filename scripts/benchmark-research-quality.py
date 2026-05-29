@@ -7,22 +7,19 @@ import os
 import statistics
 import subprocess
 import sys
+from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from katala_web_research.evaluation import run_eval  # noqa: E402
+from katala_web_research.evaluation import default_eval_cases, run_eval  # noqa: E402
 from katala_web_research.providers import search  # noqa: E402
 
 
-THEMES = [
-    "agentic retrieval source quality",
-    "Claude citations source documents",
-    "query decomposition retrieval augmented generation evaluation",
-    "research agent benchmark metrics",
-    "OpenAlex scholarly search citation metadata",
-]
+EVAL_CASES = default_eval_cases()
+THEMES = [case.query for case in EVAL_CASES]
+LIVE_THEMES = THEMES[:3]
 
 
 def main() -> int:
@@ -41,10 +38,12 @@ def main() -> int:
     meta_runs = run_live_meta(args.limit) if args.live_meta else []
     payload = {
         "iterations": args.iterations,
+        "case_count": len(eval_runs[0].cases) if eval_runs else 0,
         "scores": [run.score for run in eval_runs],
         "min_score": min(run.score for run in eval_runs),
         "max_score": max(run.score for run in eval_runs),
         "mean_score": round(statistics.mean(run.score for run in eval_runs), 2),
+        "category_scores": aggregate_category_scores(eval_runs),
         "all_passed": all(run.passed for run in eval_runs),
         "themes": THEMES,
         "token_budget": token_runs,
@@ -92,7 +91,7 @@ def run_token_budget() -> list[dict]:
 
 def run_live_openalex(limit: int) -> list[dict]:
     rows = []
-    for theme in THEMES[:3]:
+    for theme in LIVE_THEMES:
         try:
             results = live_search_with_retry(theme, provider="openalex", limit=limit)
             rows.append(
@@ -111,7 +110,7 @@ def run_live_openalex(limit: int) -> list[dict]:
 
 def run_live_meta(limit: int) -> list[dict]:
     rows = []
-    for theme in THEMES[:3]:
+    for theme in LIVE_THEMES:
         try:
             results = live_search_with_retry(theme, provider="meta", limit=limit)
             source_counts: dict[str, int] = {}
@@ -146,7 +145,7 @@ def build_report(payload: dict) -> str:
     lines = [
         "# Research Quality Benchmark Log",
         "",
-        "- date: 2026-05-27",
+        f"- date: {date.today().isoformat()}",
         "- scope: deterministic local evaluation plus optional OpenAlex/meta live checks",
         "- network required: no for deterministic eval; yes for `--live-openalex` or `--live-meta`",
         "- gate command: `scripts/verify.sh`",
@@ -154,14 +153,24 @@ def build_report(payload: dict) -> str:
         "## Deterministic Multi-Run Evaluation",
         "",
         f"- iterations: {payload['iterations']}",
+        f"- case_count: {payload['case_count']}",
         f"- min_score: {payload['min_score']}",
         f"- max_score: {payload['max_score']}",
         f"- mean_score: {payload['mean_score']}",
         f"- all_passed: {str(payload['all_passed']).lower()}",
         "",
-        "## Themes",
+        "## Domain Category Scores",
         "",
     ]
+    for category, scores in sorted(payload["category_scores"].items()):
+        lines.append(f"- {category}: min={scores['min']} max={scores['max']} mean={scores['mean']}")
+    lines.extend(
+        [
+            "",
+            "## Themes",
+            "",
+        ]
+    )
     for theme in payload["themes"]:
         lines.append(f"- {theme}")
     lines.extend(["", "## Token Budget Benchmark", ""])
@@ -204,6 +213,21 @@ def build_report(payload: dict) -> str:
         ]
     )
     return "\n".join(lines)
+
+
+def aggregate_category_scores(eval_runs: list) -> dict[str, dict[str, float | int]]:
+    grouped: dict[str, list[int]] = {}
+    for run in eval_runs:
+        for category, score in run.category_scores.items():
+            grouped.setdefault(category, []).append(score)
+    return {
+        category: {
+            "min": min(scores),
+            "max": max(scores),
+            "mean": round(statistics.mean(scores), 2),
+        }
+        for category, scores in grouped.items()
+    }
 
 
 if __name__ == "__main__":

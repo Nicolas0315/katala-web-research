@@ -3,6 +3,7 @@ from __future__ import annotations
 from .models import PageSnapshot, RepoHit, SearchResult, utc_now_iso
 from .planner import SearchPlanStep, format_search_plan
 from .source_quality import classify_url
+from .source_registry import source_registry_metadata
 
 
 def sort_web_candidates(results: list[SearchResult]) -> list[SearchResult]:
@@ -48,7 +49,11 @@ def build_investigation_report(
         for result in sorted_results:
             source_type, quality = classify_url(result.url)
             captured = "yes" if result.url in captured_urls else "no"
-            lines.append(f"- `{source_type}` quality={quality} captured={captured} score={result.score}: {result.url}")
+            registry = source_registry_metadata(result.url)
+            registry_suffix = f" registry={registry['registry_source']}" if registry else ""
+            lines.append(
+                f"- `{source_type}` quality={quality} captured={captured} score={result.score}{registry_suffix}: {result.url}"
+            )
         lines.append("")
     else:
         lines.extend(["No web evidence.", ""])
@@ -65,10 +70,10 @@ def build_investigation_report(
                     f"- quality_score: {quality}",
                     f"- search_score: {result.score}",
                     f"- published_at: {result.published_at or 'unknown'}",
-                    f"- snippet: {result.snippet or 'none'}",
-                    "",
                 ]
             )
+            lines.extend(_registry_lines(result.url))
+            lines.extend([f"- snippet: {result.snippet or 'none'}", ""])
     else:
         lines.extend(["No web results.", ""])
 
@@ -126,3 +131,17 @@ def build_investigation_report(
 def _candidate_sort_key(result: SearchResult) -> tuple[int, float, int, str]:
     _source_type, quality = classify_url(result.url)
     return (-quality, -result.score, result.rank, result.url)
+
+
+def _registry_lines(url: str) -> list[str]:
+    metadata = source_registry_metadata(url)
+    if metadata is None:
+        return []
+    return [
+        f"- registry_source: {metadata['registry_source']}",
+        f"- registry_domain: {metadata['registry_domain']}",
+        f"- registry_freshness: {metadata['registry_freshness']}",
+        f"- registry_update_cadence: {metadata['registry_update_cadence']}",
+        f"- registry_trust_score: {metadata['registry_trust_score']}",
+        f"- bias_caveat: {metadata['bias_caveat']}",
+    ]

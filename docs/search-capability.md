@@ -12,6 +12,7 @@ The tool improves access to better information by combining six layers:
 4. source-quality ranking
 5. page capture into a reusable archive
 6. agent-facing retrieval through CLI and MCP
+7. trusted source registry for domain-specific source and bias metadata
 
 The result is not just "more search results". The result is a repeatable pipeline that can find, rank, capture, and re-query evidence.
 
@@ -31,6 +32,7 @@ The result is not just "more search results". The result is a repeatable pipelin
 The search surface supports multiple backends with different failure modes:
 
 - `ddg`: no-key default web search for a cheap first pass.
+- `feed`: local RSS/Atom/JSON Feed archive search for monitored sources.
 - `github`: GitHub CLI or GitHub REST repository search for primary code sources.
 - `jina`: optional semantic web search through `JINA_API_KEY`.
 - `searxng`: optional private metasearch through `KWR_SEARXNG_URL`.
@@ -52,6 +54,16 @@ This lets the rest of the system rank, archive, and report results without carin
 
 The `meta` provider applies the useful SearXNG pattern without embedding SearXNG itself: each engine remains a small adapter, outputs are normalized, per-engine failures are isolated, Reciprocal Rank Fusion rewards cross-engine consensus, and final ranking is handled by the Katala-style Gate -> Scorer -> Selector layer.
 
+`meta` also records per-engine run health in each JSON result:
+
+- status: `ok`, `empty`, or `error`
+- latency in milliseconds
+- result count
+- bounded health score
+- error kind, without raw secrets or session data
+
+That health score weights the fusion layer, so a slow, empty, or failing engine is visible to the operator and contributes less than a healthy engine.
+
 `KWR_META_PROFILE` selects source mix and deterministic query rewriting:
 
 - `broad`: default web, code, scholarly, and SearXNG mix
@@ -63,7 +75,22 @@ The `meta` provider applies the useful SearXNG pattern without embedding SearXNG
 
 `KWR_META_PROVIDERS` still overrides the profile when an exact engine list is required.
 
-## 3. Local Prior-Art Corpus
+## 3. Feed Monitoring Sources
+
+`kwr feeds` adds RSS, Atom, and JSON Feed sources as local-first research inputs:
+
+```sh
+kwr feeds add https://example.com/feed.xml --archive ~/.kwr/research.sqlite
+kwr feeds refresh --archive ~/.kwr/research.sqlite
+kwr feeds query "agent research" --archive ~/.kwr/research.sqlite
+kwr search "agent research" --provider feed --archive ~/.kwr/research.sqlite
+```
+
+The feed layer is intentionally small. It borrows the adapter idea from RSSHub and RSS-Bridge, but it does not vendor their code or require their runtimes. Public RSSHub routes, RSS-Bridge bridges, official product feeds, and ordinary blog feeds all enter Katala as source URLs and are normalized into archived feed items.
+
+Feed search improves recurring research because it can monitor known high-signal sources before broad web search. The source health fields track refresh status, item count, and error kind without storing cookies, sessions, API keys, or browser state.
+
+## 4. Local Prior-Art Corpus
 
 `kwr repos scan` turns local Git repositories into a searchable prior-art corpus. The intended high-value root is:
 
@@ -91,7 +118,7 @@ It skips runtime-heavy or sensitive paths:
 
 This improves search because the system can compare new web candidates against local repo knowledge, prior tools, implementation patterns, and agent instructions that are already on the machine.
 
-## 4. Incremental Corpus Refresh
+## 5. Incremental Corpus Refresh
 
 The scanner stores file metadata:
 
@@ -109,7 +136,7 @@ first bounded scan: indexed_documents: 13
 second bounded scan: indexed_documents: 0, skipped_unchanged: 13
 ```
 
-## 5. Source-Quality Ranking
+## 6. Source-Quality Ranking
 
 Raw result order is not trusted as final quality. `source_quality.py` classifies URLs into quality bands:
 
@@ -122,6 +149,22 @@ Raw result order is not trusted as final quality. `source_quality.py` classifies
 
 `kwr brief` and `kwr investigate` combine this classification with query overlap, primary-source bonuses, title matches, limited freshness signals, and provider-native boosts. This keeps official docs and primary research from being buried by broad blog results that merely repeat the query terms.
 
+The trusted source registry extends this from host heuristics to domain-specific
+source metadata. Registry entries include domain, source type, query types,
+freshness, trust score, bias caveat, update cadence, and avoid-for notes. For
+example, security queries can route NVD and CISA KEV differently, while news
+queries can surface bias-comparison sources without treating them as final
+truth.
+
+```sh
+kwr sources list --domain security --json
+kwr sources list --domain news --query-type media_bias
+kwr sources match https://www.cisa.gov/known-exploited-vulnerabilities-catalog --json
+```
+
+Matched sources are also surfaced in generated briefs and investigation reports
+with registry source name, freshness, update cadence, trust score, and caveat.
+
 Example verified outcome:
 
 ```sh
@@ -130,7 +173,7 @@ kwr investigate "OpenAI Agents SDK handoffs" --web-limit 3 --read-top 1
 
 The official OpenAI Developers orchestration/handoffs page was ranked ahead of ordinary web/blog results and captured into the archive.
 
-## 6. Page Capture And Reuse
+## 7. Page Capture And Reuse
 
 Search results are volatile. `kwr collect` and `kwr investigate` capture selected pages into SQLite:
 
@@ -151,7 +194,7 @@ This turns transient search results into reusable local evidence.
 
 Investigation reports also include an evidence matrix that shows source class, quality score, capture status, ranking score, and URL for each selected candidate.
 
-## 7. Integrated Investigation
+## 8. Integrated Investigation
 
 `kwr investigate` is the main workflow command. It performs:
 
@@ -165,7 +208,7 @@ Investigation reports also include an evidence matrix that shows source class, q
 
 This is the command to use when the goal is "research this well", not just "search this string".
 
-## 8. Agent Access Through MCP
+## 9. Agent Access Through MCP
 
 `kwr mcp` exposes the same functions as MCP tools:
 

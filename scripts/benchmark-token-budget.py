@@ -66,7 +66,7 @@ def main() -> int:
                     "--out",
                     str(report_dir / "eval.md"),
                 ],
-                900,
+                1_600,
                 [report_dir / "eval.md"],
             ),
             BenchCase(

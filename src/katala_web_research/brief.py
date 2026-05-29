@@ -3,6 +3,7 @@ from __future__ import annotations
 from .models import RepoHit, SearchResult, utc_now_iso
 from .planner import SearchPlanStep, format_search_plan
 from .source_quality import classify_url
+from .source_registry import source_registry_metadata
 
 
 def build_brief(
@@ -39,10 +40,10 @@ def build_brief(
                     f"- source_type: {label}",
                     f"- quality_score: {quality}",
                     f"- search_score: {result.score}",
-                    f"- snippet: {result.snippet or 'none'}",
-                    "",
                 ]
             )
+            lines.extend(_registry_lines(result.url))
+            lines.extend([f"- snippet: {result.snippet or 'none'}", ""])
     else:
         lines.extend(["No web search was run.", ""])
 
@@ -80,3 +81,17 @@ def build_brief(
 def _web_sort_key(result: SearchResult) -> tuple[int, float, int]:
     _label, quality = classify_url(result.url)
     return (-quality, -result.score, result.rank)
+
+
+def _registry_lines(url: str) -> list[str]:
+    metadata = source_registry_metadata(url)
+    if metadata is None:
+        return []
+    return [
+        f"- registry_source: {metadata['registry_source']}",
+        f"- registry_domain: {metadata['registry_domain']}",
+        f"- registry_freshness: {metadata['registry_freshness']}",
+        f"- registry_update_cadence: {metadata['registry_update_cadence']}",
+        f"- registry_trust_score: {metadata['registry_trust_score']}",
+        f"- bias_caveat: {metadata['bias_caveat']}",
+    ]
