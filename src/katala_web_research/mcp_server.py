@@ -40,6 +40,7 @@ TOOLS = [
                 "query": {"type": "string"},
                 "provider": {"type": "string", "default": "ddg"},
                 "limit": {"type": "integer", "default": 5},
+                "archive": {"type": "string", "default": str(DEFAULT_ARCHIVE)},
             },
             "required": ["query"],
         },
@@ -171,6 +172,7 @@ def call_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             str(arguments["query"]),
             provider=str(arguments.get("provider", "ddg")),
             limit=int(arguments.get("limit", 5)),
+            archive_path=str(arguments.get("archive", DEFAULT_ARCHIVE)),
         )
         return text_result(json.dumps([item.to_dict() for item in results], ensure_ascii=False, indent=2))
     if name == "kwr.read":

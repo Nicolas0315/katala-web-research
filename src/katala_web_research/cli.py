@@ -15,7 +15,7 @@ from .corpus import scan_repos
 from .evaluation import build_eval_report, run_eval
 from .feeds import fetch_and_parse_feed
 from .investigation import build_investigation_report, sort_web_candidates
-from .models import FeedSource, PageSnapshot, SearchResult
+from .models import FeedSource, PageSnapshot, SearchResult, utc_now_iso
 from .planner import build_search_plan
 from .providers import provider_status, search
 from .reader import read_url
@@ -383,7 +383,7 @@ def cmd_feeds_refresh(args: argparse.Namespace) -> int:
                     url=source.url,
                     title=source.title,
                     kind=source.kind,
-                    last_fetched_at="",
+                    last_fetched_at=utc_now_iso(),
                     status="error",
                     health_score=0.0,
                     error_kind=exc.__class__.__name__,

@@ -64,6 +64,44 @@ class McpServerTests(unittest.TestCase):
         text = response["result"]["content"][0]["text"]
         self.assertIn("RSSHub adapter research", text)
 
+    def test_search_feed_provider_uses_requested_archive(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            feed_archive_path = Path(tmp) / "feed.sqlite"
+            empty_archive_path = Path(tmp) / "empty.sqlite"
+            parsed = parse_feed_text(
+                (FIXTURES / "sample.rss.xml").read_text(encoding="utf-8"),
+                source_url="https://example.com/feed.xml",
+                fetched_at="2026-05-28T00:00:00+00:00",
+            )
+            feed_archive = Archive(feed_archive_path)
+            try:
+                feed_archive.upsert_feed_source(parsed.source)
+                feed_archive.upsert_feed_items(parsed.items)
+            finally:
+                feed_archive.close()
+
+            with patch.dict("os.environ", {"KWR_ARCHIVE": str(empty_archive_path)}):
+                response = handle_request(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": 4,
+                        "method": "tools/call",
+                        "params": {
+                            "name": "kwr.search",
+                            "arguments": {
+                                "query": "RSSHub adapter",
+                                "provider": "feed",
+                                "archive": str(feed_archive_path),
+                                "limit": 5,
+                            },
+                        },
+                    }
+                )
+
+        text = response["result"]["content"][0]["text"]
+        self.assertIn("RSSHub adapter research", text)
+        self.assertIn("https://example.com/rsshub-adapter", text)
+
 
 if __name__ == "__main__":
     unittest.main()

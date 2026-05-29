@@ -457,8 +457,24 @@ def get_provider(name: str) -> SearchProvider:
     return PROVIDERS[name]
 
 
-def search(query: str, *, provider: str = "ddg", limit: int = 10) -> list[SearchResult]:
-    return get_provider(provider).search(query, limit=limit)
+def search(
+    query: str,
+    *,
+    provider: str = "ddg",
+    limit: int = 10,
+    archive_path: str | None = None,
+) -> list[SearchResult]:
+    if archive_path is None:
+        return get_provider(provider).search(query, limit=limit)
+    old_archive = os.environ.get("KWR_ARCHIVE")
+    os.environ["KWR_ARCHIVE"] = archive_path
+    try:
+        return get_provider(provider).search(query, limit=limit)
+    finally:
+        if old_archive is None:
+            os.environ.pop("KWR_ARCHIVE", None)
+        else:
+            os.environ["KWR_ARCHIVE"] = old_archive
 
 
 def provider_status() -> list[dict[str, str]]:

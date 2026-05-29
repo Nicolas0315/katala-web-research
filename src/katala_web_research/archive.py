@@ -312,10 +312,22 @@ class Archive:
                 WHEN excluded.last_fetched_at != '' THEN excluded.last_fetched_at
                 ELSE feed_sources.last_fetched_at
               END,
-              status=excluded.status,
-              health_score=excluded.health_score,
-              error_kind=excluded.error_kind,
-              last_item_count=excluded.last_item_count
+              status=CASE
+                WHEN excluded.last_fetched_at != '' THEN excluded.status
+                ELSE feed_sources.status
+              END,
+              health_score=CASE
+                WHEN excluded.last_fetched_at != '' THEN excluded.health_score
+                ELSE feed_sources.health_score
+              END,
+              error_kind=CASE
+                WHEN excluded.last_fetched_at != '' THEN excluded.error_kind
+                ELSE feed_sources.error_kind
+              END,
+              last_item_count=CASE
+                WHEN excluded.last_fetched_at != '' THEN excluded.last_item_count
+                ELSE feed_sources.last_item_count
+              END
             """,
             (
                 source.url,

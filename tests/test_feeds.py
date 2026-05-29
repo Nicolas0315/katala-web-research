@@ -146,6 +146,35 @@ class FeedTests(unittest.TestCase):
         self.assertEqual(sources[0].title, "Manual")
         self.assertEqual(sources[0].status, "pending")
 
+    def test_feed_source_add_preserves_refresh_state(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = Archive(Path(tmp) / "archive.sqlite")
+            try:
+                archive.upsert_feed_source(
+                    FeedSource(
+                        url="https://example.com/feed.xml",
+                        title="Katala Updates",
+                        kind="rss",
+                        last_fetched_at="2026-05-28T00:00:00+00:00",
+                        status="ok",
+                        health_score=1.0,
+                        last_item_count=2,
+                    )
+                )
+                archive.upsert_feed_source(
+                    FeedSource(url="https://example.com/feed.xml", title="Manual Title")
+                )
+                sources = archive.feed_sources()
+            finally:
+                archive.close()
+
+        self.assertEqual(sources[0].title, "Manual Title")
+        self.assertEqual(sources[0].kind, "rss")
+        self.assertEqual(sources[0].last_fetched_at, "2026-05-28T00:00:00+00:00")
+        self.assertEqual(sources[0].status, "ok")
+        self.assertEqual(sources[0].health_score, 1.0)
+        self.assertEqual(sources[0].last_item_count, 2)
+
     def test_malformed_feed_fails_cleanly(self):
         with self.assertRaises(ValueError):
             parse_feed_text("<rss><broken>", source_url="https://example.com/feed.xml")
