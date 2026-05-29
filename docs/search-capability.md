@@ -165,6 +165,26 @@ kwr sources match https://www.cisa.gov/known-exploited-vulnerabilities-catalog -
 Matched sources are also surfaced in generated briefs and investigation reports
 with registry source name, freshness, update cadence, trust score, and caveat.
 
+## 7. Project And Issue Radar
+
+`kwr issues` brings the same local-first archive pattern to active project work.
+It ingests GitHub Issues and PRs through the GitHub CLI, stores only non-secret
+metadata, and makes the queue searchable by repository, title, priority, status,
+and labels.
+
+```sh
+kwr issues ingest --owner Nicolas0315 --archive ~/.kwr/projects.sqlite
+kwr issues query "aws p0" --archive ~/.kwr/projects.sqlite
+kwr issues report --archive ~/.kwr/projects.sqlite --out ~/work/docs/project-radar/latest.md
+```
+
+This is intended for read-only triage and verification design:
+
+- find P0/P1 work across repos without opening every GitHub page
+- connect Issues and PRs to local docs, runbooks, and verification commands
+- produce a durable project-radar report under `~/work/docs`
+- keep GitHub writes, merges, and status changes outside the ingest path
+
 Example verified outcome:
 
 ```sh
@@ -173,7 +193,7 @@ kwr investigate "OpenAI Agents SDK handoffs" --web-limit 3 --read-top 1
 
 The official OpenAI Developers orchestration/handoffs page was ranked ahead of ordinary web/blog results and captured into the archive.
 
-## 7. Page Capture And Reuse
+## 8. Page Capture And Reuse
 
 Search results are volatile. `kwr collect` and `kwr investigate` capture selected pages into SQLite:
 
@@ -194,7 +214,7 @@ This turns transient search results into reusable local evidence.
 
 Investigation reports also include an evidence matrix that shows source class, quality score, capture status, ranking score, and URL for each selected candidate.
 
-## 8. Integrated Investigation
+## 9. Integrated Investigation
 
 `kwr investigate` is the main workflow command. It performs:
 
@@ -208,7 +228,7 @@ Investigation reports also include an evidence matrix that shows source class, q
 
 This is the command to use when the goal is "research this well", not just "search this string".
 
-## 9. Agent Access Through MCP
+## 10. Agent Access Through MCP
 
 `kwr mcp` exposes the same functions as MCP tools:
 

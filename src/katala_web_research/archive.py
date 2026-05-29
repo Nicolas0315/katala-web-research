@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from pathlib import Path
 
@@ -9,6 +10,8 @@ from .models import (
     FeedItem,
     FeedSource,
     PageSnapshot,
+    ProjectHit,
+    ProjectItem,
     RepoDocument,
     RepoHit,
     SearchResult,
@@ -105,6 +108,24 @@ class Archive:
             );
             CREATE VIRTUAL TABLE IF NOT EXISTS feed_items_fts
               USING fts5(title, summary, source_title, url UNINDEXED, source_url UNINDEXED, content='feed_items', content_rowid='id');
+            CREATE TABLE IF NOT EXISTS project_items (
+              id INTEGER PRIMARY KEY,
+              kind TEXT NOT NULL,
+              repository TEXT NOT NULL,
+              number INTEGER NOT NULL,
+              title TEXT NOT NULL,
+              url TEXT NOT NULL,
+              state TEXT NOT NULL,
+              updated_at TEXT NOT NULL,
+              labels_json TEXT NOT NULL,
+              labels_text TEXT NOT NULL,
+              priority TEXT NOT NULL DEFAULT 'p3',
+              status TEXT NOT NULL DEFAULT '',
+              source TEXT NOT NULL DEFAULT 'github',
+              UNIQUE(kind, repository, number)
+            );
+            CREATE VIRTUAL TABLE IF NOT EXISTS project_items_fts
+              USING fts5(repository, title, labels_text, priority, status, url UNINDEXED, kind UNINDEXED, content='project_items', content_rowid='id');
             CREATE TRIGGER IF NOT EXISTS pages_ai AFTER INSERT ON pages BEGIN
               INSERT INTO pages_fts(rowid, title, content, url)
               VALUES (new.id, new.title, new.content, new.url);
@@ -146,6 +167,20 @@ class Archive:
               VALUES('delete', old.id, old.title, old.summary, old.source_title, old.url, old.source_url);
               INSERT INTO feed_items_fts(rowid, title, summary, source_title, url, source_url)
               VALUES (new.id, new.title, new.summary, new.source_title, new.url, new.source_url);
+            END;
+            CREATE TRIGGER IF NOT EXISTS project_items_ai AFTER INSERT ON project_items BEGIN
+              INSERT INTO project_items_fts(rowid, repository, title, labels_text, priority, status, url, kind)
+              VALUES (new.id, new.repository, new.title, new.labels_text, new.priority, new.status, new.url, new.kind);
+            END;
+            CREATE TRIGGER IF NOT EXISTS project_items_ad AFTER DELETE ON project_items BEGIN
+              INSERT INTO project_items_fts(project_items_fts, rowid, repository, title, labels_text, priority, status, url, kind)
+              VALUES('delete', old.id, old.repository, old.title, old.labels_text, old.priority, old.status, old.url, old.kind);
+            END;
+            CREATE TRIGGER IF NOT EXISTS project_items_au AFTER UPDATE ON project_items BEGIN
+              INSERT INTO project_items_fts(project_items_fts, rowid, repository, title, labels_text, priority, status, url, kind)
+              VALUES('delete', old.id, old.repository, old.title, old.labels_text, old.priority, old.status, old.url, old.kind);
+              INSERT INTO project_items_fts(rowid, repository, title, labels_text, priority, status, url, kind)
+              VALUES (new.id, new.repository, new.title, new.labels_text, new.priority, new.status, new.url, new.kind);
             END;
             """
         )
@@ -397,6 +432,46 @@ class Archive:
         self.conn.commit()
         return len(items)
 
+    def upsert_project_items(self, items: list[ProjectItem]) -> int:
+        self.conn.executemany(
+            """
+            INSERT INTO project_items(
+              kind, repository, number, title, url, state, updated_at, labels_json,
+              labels_text, priority, status, source
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(kind, repository, number) DO UPDATE SET
+              title=excluded.title,
+              url=excluded.url,
+              state=excluded.state,
+              updated_at=excluded.updated_at,
+              labels_json=excluded.labels_json,
+              labels_text=excluded.labels_text,
+              priority=excluded.priority,
+              status=excluded.status,
+              source=excluded.source
+            """,
+            [
+                (
+                    item.kind,
+                    item.repository,
+                    item.number,
+                    item.title,
+                    item.url,
+                    item.state,
+                    item.updated_at,
+                    json.dumps(item.labels, ensure_ascii=False),
+                    " ".join(item.labels),
+                    item.priority,
+                    item.status,
+                    item.source,
+                )
+                for item in items
+            ],
+        )
+        self.conn.commit()
+        return len(items)
+
     def repo_document_metadata(self) -> dict[tuple[str, str], tuple[int, int, str]]:
         rows = self.conn.execute(
             "SELECT repo_path, rel_path, file_size, file_mtime_ns, content_sha256 FROM repo_documents"
@@ -497,6 +572,79 @@ class Archive:
             )
             for row in rows
         ]
+
+    def query_project_items(self, terms: str, *, limit: int = 10) -> list[ProjectHit]:
+        rows = self.conn.execute(
+            """
+            SELECT i.kind, i.repository, i.number, i.title, i.url, i.state, i.updated_at,
+                   i.labels_json, i.priority, i.status, i.source,
+                   bm25(project_items_fts) AS rank,
+                   snippet(project_items_fts, 1, '[', ']', '...', 18) AS snippet
+            FROM project_items_fts
+            JOIN project_items i ON i.id = project_items_fts.rowid
+            WHERE project_items_fts MATCH ?
+            ORDER BY rank
+            LIMIT ?
+            """,
+            (_fts_query(terms), limit),
+        ).fetchall()
+        return [_project_hit_from_row(row) for row in rows]
+
+    def project_items(self, *, limit: int = 100) -> list[ProjectItem]:
+        rows = self.conn.execute(
+            """
+            SELECT kind, repository, number, title, url, state, updated_at,
+                   labels_json, priority, status, source
+            FROM project_items
+            ORDER BY
+              CASE priority
+                WHEN 'p0' THEN 0
+                WHEN 'p1' THEN 1
+                WHEN 'p2' THEN 2
+                WHEN 'p3' THEN 3
+                ELSE 9
+              END,
+              updated_at DESC,
+              repository,
+              number
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+        return [
+            ProjectItem(
+                kind=row["kind"],
+                repository=row["repository"],
+                number=int(row["number"]),
+                title=row["title"],
+                url=row["url"],
+                state=row["state"],
+                updated_at=row["updated_at"],
+                labels=json.loads(row["labels_json"] or "[]"),
+                priority=row["priority"],
+                status=row["status"],
+                source=row["source"],
+            )
+            for row in rows
+        ]
+
+
+def _project_hit_from_row(row: sqlite3.Row) -> ProjectHit:
+    return ProjectHit(
+        kind=row["kind"],
+        repository=row["repository"],
+        number=int(row["number"]),
+        title=row["title"],
+        url=row["url"],
+        state=row["state"],
+        updated_at=row["updated_at"],
+        labels=json.loads(row["labels_json"] or "[]"),
+        priority=row["priority"],
+        status=row["status"],
+        source=row["source"],
+        rank=float(row["rank"]),
+        snippet=row["snippet"],
+    )
 
 
 def _fts_query(terms: str) -> str:
