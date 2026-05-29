@@ -330,7 +330,10 @@ def default_eval_cases() -> list[EvalCase]:
 
 
 def run_eval(*, min_score: int = 80, max_subqueries: int = 4) -> EvalSummary:
-    results = [evaluate_case(case, max_subqueries=max_subqueries) for case in default_eval_cases()]
+    results = [
+        evaluate_case(case, max_subqueries=max_subqueries, min_score=min_score)
+        for case in default_eval_cases()
+    ]
     score = round(sum(result.score for result in results) / max(len(results), 1))
     category_scores = _category_scores(results)
     return EvalSummary(
@@ -342,7 +345,7 @@ def run_eval(*, min_score: int = 80, max_subqueries: int = 4) -> EvalSummary:
     )
 
 
-def evaluate_case(case: EvalCase, *, max_subqueries: int = 4) -> EvalCaseResult:
+def evaluate_case(case: EvalCase, *, max_subqueries: int = 4, min_score: int = 80) -> EvalCaseResult:
     plan = build_search_plan(case.query, max_subqueries=max_subqueries)
     ranked = rank_results(case.query, list(case.candidates))
     top_urls = [result.url for result in ranked[:3]]
@@ -365,7 +368,7 @@ def evaluate_case(case: EvalCase, *, max_subqueries: int = 4) -> EvalCaseResult:
         category=case.category,
         query=case.query,
         score=score,
-        passed=score >= 80,
+        passed=score >= min_score,
         plan_intents=plan_intents,
         top_urls=top_urls,
         metrics={

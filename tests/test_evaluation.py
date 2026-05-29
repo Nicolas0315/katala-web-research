@@ -15,6 +15,13 @@ class EvaluationTests(unittest.TestCase):
         self.assertIn("feed_monitoring", summary.category_scores)
         self.assertTrue(all(score >= 80 for score in summary.category_scores.values()))
 
+    def test_min_score_controls_case_pass_threshold(self):
+        summary = run_eval(min_score=50, max_subqueries=1)
+
+        self.assertTrue(summary.passed)
+        self.assertGreaterEqual(summary.score, 50)
+        self.assertTrue(any(case.score < 80 and case.passed for case in summary.cases))
+
     def test_eval_report_includes_case_scores(self):
         summary = run_eval(min_score=80)
         report = build_eval_report(summary)
