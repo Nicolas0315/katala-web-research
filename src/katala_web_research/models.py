@@ -51,6 +51,51 @@ class ArchiveHit:
 
 
 @dataclass(slots=True)
+class FeedSource:
+    url: str
+    title: str = ""
+    kind: str = ""
+    added_at: str = ""
+    last_fetched_at: str = ""
+    status: str = "pending"
+    health_score: float = 0.0
+    error_kind: str = ""
+    last_item_count: int = 0
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(slots=True)
+class FeedItem:
+    source_url: str
+    url: str
+    title: str
+    summary: str = ""
+    source_title: str = ""
+    published_at: str | None = None
+    fetched_at: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(slots=True)
+class FeedHit:
+    url: str
+    title: str
+    snippet: str
+    rank: float
+    source_url: str
+    source_title: str
+    published_at: str | None
+    fetched_at: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(slots=True)
 class RepoDocument:
     repo_path: str
     repo_name: str

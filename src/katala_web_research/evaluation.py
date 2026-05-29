@@ -11,6 +11,7 @@ from .source_quality import classify_url
 @dataclass(slots=True, frozen=True)
 class EvalCase:
     name: str
+    category: str
     query: str
     candidates: list[SearchResult]
     expected_plan_intents: tuple[str, ...]
@@ -22,6 +23,7 @@ class EvalCase:
 @dataclass(slots=True)
 class EvalCaseResult:
     name: str
+    category: str
     query: str
     score: int
     passed: bool
@@ -39,12 +41,14 @@ class EvalSummary:
     passed: bool
     min_score: int
     cases: list[EvalCaseResult]
+    category_scores: dict[str, int]
 
     def to_dict(self) -> dict:
         return {
             "score": self.score,
             "passed": self.passed,
             "min_score": self.min_score,
+            "category_scores": self.category_scores,
             "cases": [case.to_dict() for case in self.cases],
         }
 
@@ -53,6 +57,7 @@ def default_eval_cases() -> list[EvalCase]:
     return [
         EvalCase(
             name="agentic_retrieval_prefers_official_and_primary",
+            category="platform_api_docs",
             query="agentic retrieval source quality",
             candidates=[
                 SearchResult(
@@ -80,6 +85,7 @@ def default_eval_cases() -> list[EvalCase]:
         ),
         EvalCase(
             name="citations_prefers_vendor_docs",
+            category="ai_vendor_docs",
             query="Claude citations source documents",
             candidates=[
                 SearchResult(
@@ -101,6 +107,7 @@ def default_eval_cases() -> list[EvalCase]:
         ),
         EvalCase(
             name="papers_surface_primary_research",
+            category="scholarly_research",
             query="query decomposition retrieval augmented generation evaluation",
             candidates=[
                 SearchResult(
@@ -130,6 +137,7 @@ def default_eval_cases() -> list[EvalCase]:
         ),
         EvalCase(
             name="fusion_consensus_beats_single_engine_outlier",
+            category="metasearch_fusion",
             query="agent search documentation rank fusion",
             candidates=[
                 SearchResult(
@@ -150,16 +158,194 @@ def default_eval_cases() -> list[EvalCase]:
             preferred_url_terms=("docs.github.com",),
             discouraged_url_terms=("example.com",),
         ),
+        EvalCase(
+            name="feed_monitoring_prefers_official_release_notes",
+            category="feed_monitoring",
+            query="Python release feed security notes",
+            candidates=[
+                SearchResult(
+                    title="Python release rumors",
+                    url="https://example.com/python-release-rumors",
+                    snippet="A commentary post about Python releases and security notes.",
+                    rank=1,
+                ),
+                SearchResult(
+                    title="What is New In Python",
+                    url="https://docs.python.org/3/whatsnew/3.14.html",
+                    snippet="Official release notes and changed behavior for Python.",
+                    rank=2,
+                    published_at="2026-05-01",
+                ),
+            ],
+            expected_plan_intents=("baseline", "official", "primary"),
+            preferred_url_terms=("docs.python.org",),
+            discouraged_url_terms=("example.com",),
+            min_top_quality=70,
+        ),
+        EvalCase(
+            name="security_prefers_primary_advisory",
+            category="security_advisory",
+            query="Node.js OpenSSL vulnerability advisory",
+            candidates=[
+                SearchResult(
+                    title="Node OpenSSL vulnerability analysis",
+                    url="https://example.com/node-openssl-analysis",
+                    snippet="A secondary article about a Node.js vulnerability.",
+                    rank=1,
+                ),
+                SearchResult(
+                    title="Node.js security advisory",
+                    url="https://github.com/nodejs/node/security/advisories/GHSA-node-openssl",
+                    snippet="Primary security advisory for Node.js and OpenSSL.",
+                    source="github",
+                    rank=2,
+                    published_at="2026-04-10",
+                ),
+                SearchResult(
+                    title="NVD CVE detail",
+                    url="https://nvd.nist.gov/vuln/detail/CVE-2026-0001",
+                    snippet="Government vulnerability database entry.",
+                    rank=3,
+                ),
+            ],
+            expected_plan_intents=("baseline", "primary", "critique"),
+            preferred_url_terms=("github.com/nodejs", "nvd.nist.gov"),
+            discouraged_url_terms=("example.com",),
+            min_top_quality=75,
+        ),
+        EvalCase(
+            name="regulatory_prefers_government_source",
+            category="legal_regulatory",
+            query="FTC endorsements disclosure business guidance",
+            candidates=[
+                SearchResult(
+                    title="Influencer disclosure tips",
+                    url="https://example.com/influencer-disclosure-tips",
+                    snippet="Marketing blog summary of endorsement rules.",
+                    rank=1,
+                ),
+                SearchResult(
+                    title="FTC Endorsement Guides",
+                    url="https://www.ftc.gov/business-guidance/resources/ftcs-endorsement-guides",
+                    snippet="Government business guidance for endorsements and disclosures.",
+                    rank=2,
+                ),
+            ],
+            expected_plan_intents=("baseline", "official", "critique"),
+            preferred_url_terms=("ftc.gov",),
+            discouraged_url_terms=("example.com",),
+            min_top_quality=75,
+        ),
+        EvalCase(
+            name="open_source_prefers_primary_implementation",
+            category="open_source_code",
+            query="SearXNG engine adapter implementation",
+            candidates=[
+                SearchResult(
+                    title="Metasearch adapter blog",
+                    url="https://example.com/metasearch-adapter",
+                    snippet="A general article about search adapters.",
+                    rank=1,
+                ),
+                SearchResult(
+                    title="SearXNG engines source",
+                    url="https://github.com/searxng/searxng/tree/master/searx/engines",
+                    snippet="Primary implementation of SearXNG engine adapters.",
+                    source="github",
+                    rank=2,
+                ),
+                SearchResult(
+                    title="SearXNG engine docs",
+                    url="https://docs.searxng.org/dev/engines/index.html",
+                    snippet="Developer documentation for SearXNG engines.",
+                    rank=3,
+                ),
+            ],
+            expected_plan_intents=("baseline", "official", "primary"),
+            preferred_url_terms=("github.com/searxng", "docs.searxng.org"),
+            discouraged_url_terms=("example.com",),
+        ),
+        EvalCase(
+            name="product_release_prefers_official_changelog",
+            category="product_release_freshness",
+            query="OpenAI Agents SDK changelog release notes",
+            candidates=[
+                SearchResult(
+                    title="Agents SDK release recap",
+                    url="https://example.com/agents-sdk-release-recap",
+                    snippet="An unofficial recap of release notes.",
+                    rank=1,
+                ),
+                SearchResult(
+                    title="OpenAI Agents SDK docs",
+                    url="https://developers.openai.com/tracks/building-agents",
+                    snippet="Official OpenAI developer documentation for building agents.",
+                    rank=2,
+                    published_at="2026-05-01",
+                ),
+                SearchResult(
+                    title="OpenAI Agents Python releases",
+                    url="https://github.com/openai/openai-agents-python/releases",
+                    snippet="Primary release history for the OpenAI Agents Python SDK.",
+                    source="github",
+                    rank=3,
+                    published_at="2026-05-20",
+                ),
+            ],
+            expected_plan_intents=("baseline", "official", "primary"),
+            preferred_url_terms=("developers.openai.com", "github.com/openai"),
+            discouraged_url_terms=("example.com",),
+        ),
+        EvalCase(
+            name="news_bias_prefers_bias_comparison_source",
+            category="bias_aware_news",
+            query="news coverage political bias comparison",
+            candidates=[
+                SearchResult(
+                    title="Political bias in the news",
+                    url="https://example.com/political-bias-news",
+                    snippet="A single-site commentary article about media bias.",
+                    rank=1,
+                ),
+                SearchResult(
+                    title="Ground News bias comparison",
+                    url="https://ground.news/",
+                    snippet="Compare news coverage by source mix and political bias.",
+                    rank=2,
+                    published_at="2026-05-01",
+                ),
+                SearchResult(
+                    title="AllSides media bias ratings",
+                    url="https://www.allsides.com/media-bias/media-bias-ratings",
+                    snippet="Media bias ratings across news sources.",
+                    rank=3,
+                ),
+            ],
+            expected_plan_intents=("baseline", "official", "critique"),
+            preferred_url_terms=("ground.news", "allsides.com"),
+            discouraged_url_terms=("example.com",),
+            min_top_quality=75,
+        ),
     ]
 
 
 def run_eval(*, min_score: int = 80, max_subqueries: int = 4) -> EvalSummary:
-    results = [evaluate_case(case, max_subqueries=max_subqueries) for case in default_eval_cases()]
+    results = [
+        evaluate_case(case, max_subqueries=max_subqueries, min_score=min_score)
+        for case in default_eval_cases()
+    ]
     score = round(sum(result.score for result in results) / max(len(results), 1))
-    return EvalSummary(score=score, passed=score >= min_score, min_score=min_score, cases=results)
+    category_scores = _category_scores(results)
+    return EvalSummary(
+        score=score,
+        passed=score >= min_score and all(case.passed for case in results),
+        min_score=min_score,
+        cases=results,
+        category_scores=category_scores,
+    )
 
 
-def evaluate_case(case: EvalCase, *, max_subqueries: int = 4) -> EvalCaseResult:
+def evaluate_case(case: EvalCase, *, max_subqueries: int = 4, min_score: int = 80) -> EvalCaseResult:
     plan = build_search_plan(case.query, max_subqueries=max_subqueries)
     ranked = rank_results(case.query, list(case.candidates))
     top_urls = [result.url for result in ranked[:3]]
@@ -179,9 +365,10 @@ def evaluate_case(case: EvalCase, *, max_subqueries: int = 4) -> EvalCaseResult:
 
     return EvalCaseResult(
         name=case.name,
+        category=case.category,
         query=case.query,
         score=score,
-        passed=score >= 80,
+        passed=score >= min_score,
         plan_intents=plan_intents,
         top_urls=top_urls,
         metrics={
@@ -202,14 +389,24 @@ def build_eval_report(summary: EvalSummary) -> str:
         f"- passed: {str(summary.passed).lower()}",
         f"- cases: {len(summary.cases)}",
         "",
-        "## Cases",
+        "## Category Scores",
         "",
     ]
+    for category, score in sorted(summary.category_scores.items()):
+        lines.append(f"- {category}: {score}")
+    lines.extend(
+        [
+            "",
+            "## Cases",
+            "",
+        ]
+    )
     for case in summary.cases:
         lines.extend(
             [
                 f"### {case.name}",
                 "",
+                f"- category: {case.category}",
                 f"- query: {case.query}",
                 f"- score: {case.score}",
                 f"- passed: {str(case.passed).lower()}",
@@ -233,3 +430,10 @@ def _first_index(urls: list[str], terms: tuple[str, ...]) -> int | None:
         if any(term in url for term in terms):
             return idx
     return None
+
+
+def _category_scores(results: list[EvalCaseResult]) -> dict[str, int]:
+    grouped: dict[str, list[int]] = {}
+    for result in results:
+        grouped.setdefault(result.category, []).append(result.score)
+    return {category: round(sum(scores) / len(scores)) for category, scores in grouped.items()}

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Katala Updates</title>
+    <link>https://example.com/</link>
+    <description>Research updates</description>
+    <item>
+      <title>RSSHub adapter research</title>
+      <link>https://example.com/rsshub-adapter</link>
+      <description><![CDATA[How RSSHub-style routes can improve local research.]]></description>
+      <pubDate>Wed, 27 May 2026 12:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Feed archive design</title>
+      <link>/feed-archive</link>
+      <description>SQLite FTS for monitored feeds.</description>
+    </item>
+  </channel>
+</rss>

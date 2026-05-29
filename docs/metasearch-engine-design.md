@@ -27,7 +27,7 @@ Source engines -> Normalize -> Gate -> Scorer -> Selector -> Report / Archive
 
 Mapping:
 
-- Source engines: `ddg`, `github`, `openalex`, `searxng`, optional `brave` and `jina`
+- Source engines: `ddg`, `feed`, `github`, `openalex`, `searxng`, optional `brave` and `jina`
 - Normalize: all engines return `SearchResult`
 - Gate: drop unusable URLs and retracted scholarly candidates
 - Scorer: source quality, query fit, freshness, primary-source bonus, provider boost
@@ -67,14 +67,14 @@ Available profiles:
 - `scholarly`: OpenAlex-first paper discovery
 - `code`: GitHub-first implementation discovery
 - `fresh`: current web/news-like discovery
-- `local`: low-dependency DDG/GitHub path
+- `local`: feed archive plus low-dependency DDG/GitHub path
+- `monitoring`: feed archive first, then low-dependency DDG/GitHub path
 
 Engines that lack credentials or URLs fail closed and do not block the whole search.
 
-Before final Katala scoring, `meta` applies Reciprocal Rank Fusion so a URL seen by multiple engines gets a consensus boost without trusting incompatible engine score scales.
+Before final Katala scoring, `meta` applies health-aware Reciprocal Rank Fusion so a URL seen by multiple healthy engines gets a consensus boost without trusting incompatible engine score scales. Each result carries `meta_engine_runs` metadata with provider status, latency, result count, bounded health score, and error kind for failed engines.
 
 ## Next Engine Improvements
 
-- Engine health scores from recent failures, latency, and useful-result rate
 - Host/source quotas exposed as config
 - Optional local SearXNG instance bootstrap, kept outside the MIT code path

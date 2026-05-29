@@ -3,7 +3,17 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-from .models import ArchiveHit, PageSnapshot, RepoDocument, RepoHit, SearchResult, utc_now_iso
+from .models import (
+    ArchiveHit,
+    FeedHit,
+    FeedItem,
+    FeedSource,
+    PageSnapshot,
+    RepoDocument,
+    RepoHit,
+    SearchResult,
+    utc_now_iso,
+)
 
 
 DEFAULT_ARCHIVE = Path(".katala-web-research/archive.sqlite")
@@ -70,6 +80,31 @@ class Archive:
             );
             CREATE VIRTUAL TABLE IF NOT EXISTS repo_documents_fts
               USING fts5(repo_name, rel_path, title, context, content, kind UNINDEXED, content='repo_documents', content_rowid='id');
+            CREATE TABLE IF NOT EXISTS feed_sources (
+              id INTEGER PRIMARY KEY,
+              url TEXT NOT NULL UNIQUE,
+              title TEXT NOT NULL DEFAULT '',
+              kind TEXT NOT NULL DEFAULT '',
+              added_at TEXT NOT NULL,
+              last_fetched_at TEXT NOT NULL DEFAULT '',
+              status TEXT NOT NULL DEFAULT 'pending',
+              health_score REAL NOT NULL DEFAULT 0,
+              error_kind TEXT NOT NULL DEFAULT '',
+              last_item_count INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE TABLE IF NOT EXISTS feed_items (
+              id INTEGER PRIMARY KEY,
+              source_url TEXT NOT NULL REFERENCES feed_sources(url),
+              url TEXT NOT NULL,
+              title TEXT NOT NULL,
+              summary TEXT NOT NULL,
+              source_title TEXT NOT NULL DEFAULT '',
+              published_at TEXT,
+              fetched_at TEXT NOT NULL,
+              UNIQUE(source_url, url)
+            );
+            CREATE VIRTUAL TABLE IF NOT EXISTS feed_items_fts
+              USING fts5(title, summary, source_title, url UNINDEXED, source_url UNINDEXED, content='feed_items', content_rowid='id');
             CREATE TRIGGER IF NOT EXISTS pages_ai AFTER INSERT ON pages BEGIN
               INSERT INTO pages_fts(rowid, title, content, url)
               VALUES (new.id, new.title, new.content, new.url);
@@ -97,6 +132,20 @@ class Archive:
               VALUES('delete', old.id, old.repo_name, old.rel_path, old.title, old.context, old.content, old.kind);
               INSERT INTO repo_documents_fts(rowid, repo_name, rel_path, title, context, content, kind)
               VALUES (new.id, new.repo_name, new.rel_path, new.title, new.context, new.content, new.kind);
+            END;
+            CREATE TRIGGER IF NOT EXISTS feed_items_ai AFTER INSERT ON feed_items BEGIN
+              INSERT INTO feed_items_fts(rowid, title, summary, source_title, url, source_url)
+              VALUES (new.id, new.title, new.summary, new.source_title, new.url, new.source_url);
+            END;
+            CREATE TRIGGER IF NOT EXISTS feed_items_ad AFTER DELETE ON feed_items BEGIN
+              INSERT INTO feed_items_fts(feed_items_fts, rowid, title, summary, source_title, url, source_url)
+              VALUES('delete', old.id, old.title, old.summary, old.source_title, old.url, old.source_url);
+            END;
+            CREATE TRIGGER IF NOT EXISTS feed_items_au AFTER UPDATE ON feed_items BEGIN
+              INSERT INTO feed_items_fts(feed_items_fts, rowid, title, summary, source_title, url, source_url)
+              VALUES('delete', old.id, old.title, old.summary, old.source_title, old.url, old.source_url);
+              INSERT INTO feed_items_fts(rowid, title, summary, source_title, url, source_url)
+              VALUES (new.id, new.title, new.summary, new.source_title, new.url, new.source_url);
             END;
             """
         )
@@ -247,6 +296,107 @@ class Archive:
             self.upsert_repo_document(document)
         return len(documents)
 
+    def upsert_feed_source(self, source: FeedSource) -> None:
+        added_at = source.added_at or utc_now_iso()
+        self.conn.execute(
+            """
+            INSERT INTO feed_sources(
+              url, title, kind, added_at, last_fetched_at, status, health_score,
+              error_kind, last_item_count
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(url) DO UPDATE SET
+              title=CASE WHEN excluded.title != '' THEN excluded.title ELSE feed_sources.title END,
+              kind=CASE WHEN excluded.kind != '' THEN excluded.kind ELSE feed_sources.kind END,
+              last_fetched_at=CASE
+                WHEN excluded.last_fetched_at != '' THEN excluded.last_fetched_at
+                ELSE feed_sources.last_fetched_at
+              END,
+              status=CASE
+                WHEN excluded.last_fetched_at != '' THEN excluded.status
+                ELSE feed_sources.status
+              END,
+              health_score=CASE
+                WHEN excluded.last_fetched_at != '' THEN excluded.health_score
+                ELSE feed_sources.health_score
+              END,
+              error_kind=CASE
+                WHEN excluded.last_fetched_at != '' THEN excluded.error_kind
+                ELSE feed_sources.error_kind
+              END,
+              last_item_count=CASE
+                WHEN excluded.last_fetched_at != '' THEN excluded.last_item_count
+                ELSE feed_sources.last_item_count
+              END
+            """,
+            (
+                source.url,
+                source.title,
+                source.kind,
+                added_at,
+                source.last_fetched_at,
+                source.status,
+                source.health_score,
+                source.error_kind,
+                source.last_item_count,
+            ),
+        )
+        self.conn.commit()
+
+    def feed_sources(self) -> list[FeedSource]:
+        rows = self.conn.execute(
+            """
+            SELECT url, title, kind, added_at, last_fetched_at, status, health_score,
+                   error_kind, last_item_count
+            FROM feed_sources
+            ORDER BY url
+            """
+        ).fetchall()
+        return [
+            FeedSource(
+                url=row["url"],
+                title=row["title"],
+                kind=row["kind"],
+                added_at=row["added_at"],
+                last_fetched_at=row["last_fetched_at"],
+                status=row["status"],
+                health_score=float(row["health_score"]),
+                error_kind=row["error_kind"],
+                last_item_count=int(row["last_item_count"]),
+            )
+            for row in rows
+        ]
+
+    def upsert_feed_items(self, items: list[FeedItem]) -> int:
+        self.conn.executemany(
+            """
+            INSERT INTO feed_items(
+              source_url, url, title, summary, source_title, published_at, fetched_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(source_url, url) DO UPDATE SET
+              title=excluded.title,
+              summary=excluded.summary,
+              source_title=excluded.source_title,
+              published_at=excluded.published_at,
+              fetched_at=excluded.fetched_at
+            """,
+            [
+                (
+                    item.source_url,
+                    item.url,
+                    item.title,
+                    item.summary,
+                    item.source_title,
+                    item.published_at,
+                    item.fetched_at,
+                )
+                for item in items
+            ],
+        )
+        self.conn.commit()
+        return len(items)
+
     def repo_document_metadata(self) -> dict[tuple[str, str], tuple[int, int, str]]:
         rows = self.conn.execute(
             "SELECT repo_path, rel_path, file_size, file_mtime_ns, content_sha256 FROM repo_documents"
@@ -312,6 +462,38 @@ class Archive:
                 kind=row["kind"],
                 rank=float(row["rank"]),
                 indexed_at=row["indexed_at"],
+            )
+            for row in rows
+        ]
+
+    def query_feeds(self, terms: str, *, limit: int = 10) -> list[FeedHit]:
+        rows = self.conn.execute(
+            """
+            SELECT i.url, i.title,
+                   snippet(feed_items_fts, 1, '[', ']', '...', 18) AS snippet,
+                   bm25(feed_items_fts) AS rank,
+                   i.source_url,
+                   i.source_title,
+                   i.published_at,
+                   i.fetched_at
+            FROM feed_items_fts
+            JOIN feed_items i ON i.id = feed_items_fts.rowid
+            WHERE feed_items_fts MATCH ?
+            ORDER BY rank
+            LIMIT ?
+            """,
+            (_fts_query(terms), limit),
+        ).fetchall()
+        return [
+            FeedHit(
+                url=row["url"],
+                title=row["title"],
+                snippet=row["snippet"],
+                rank=float(row["rank"]),
+                source_url=row["source_url"],
+                source_title=row["source_title"],
+                published_at=row["published_at"],
+                fetched_at=row["fetched_at"],
             )
             for row in rows
         ]

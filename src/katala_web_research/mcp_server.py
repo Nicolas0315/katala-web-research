@@ -40,6 +40,7 @@ TOOLS = [
                 "query": {"type": "string"},
                 "provider": {"type": "string", "default": "ddg"},
                 "limit": {"type": "integer", "default": 5},
+                "archive": {"type": "string", "default": str(DEFAULT_ARCHIVE)},
             },
             "required": ["query"],
         },
@@ -171,6 +172,7 @@ def call_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             str(arguments["query"]),
             provider=str(arguments.get("provider", "ddg")),
             limit=int(arguments.get("limit", 5)),
+            archive_path=str(arguments.get("archive", DEFAULT_ARCHIVE)),
         )
         return text_result(json.dumps([item.to_dict() for item in results], ensure_ascii=False, indent=2))
     if name == "kwr.read":
@@ -208,6 +210,7 @@ def call_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 limit=int(arguments.get("web_limit", 5)),
                 expand_queries=bool(arguments.get("expand_queries", False)),
                 max_subqueries=int(arguments.get("max_subqueries", 4)),
+                archive_path=archive_path,
             )
         archive = Archive(archive_path)
         try:
@@ -236,6 +239,7 @@ def call_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 limit=int(arguments.get("web_limit", 8)),
                 expand_queries=bool(arguments.get("expand_queries", False)),
                 max_subqueries=int(arguments.get("max_subqueries", 4)),
+                archive_path=archive_path,
             )
         archive = Archive(archive_path)
         pages: list[PageSnapshot] = []

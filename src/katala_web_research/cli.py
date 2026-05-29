@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
+import os
 import sqlite3
 import sys
 from pathlib import Path
@@ -11,13 +13,18 @@ from .archive import Archive, DEFAULT_ARCHIVE
 from .brief import build_brief
 from .corpus import scan_repos
 from .evaluation import build_eval_report, run_eval
+from .feeds import fetch_and_parse_feed
 from .investigation import build_investigation_report, sort_web_candidates
-from .models import PageSnapshot, SearchResult
+from .models import FeedSource, PageSnapshot, SearchResult, utc_now_iso
 from .planner import build_search_plan
 from .providers import provider_status, search
 from .reader import read_url
 from .report import build_report
+from .source_registry import source_registry
 from .workflow import search_with_plan
+
+
+PROVIDER_CHOICES = ["brave", "ddg", "feed", "github", "jina", "meta", "openalex", "searxng"]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -37,8 +44,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_search = sub.add_parser("search", help="search the web or a provider")
     p_search.add_argument("query")
-    p_search.add_argument("--provider", default="ddg", choices=["brave", "ddg", "github", "jina", "meta", "openalex", "searxng"])
+    p_search.add_argument("--provider", default="ddg", choices=PROVIDER_CHOICES)
     p_search.add_argument("--limit", "-n", type=int, default=10)
+    p_search.add_argument("--archive", default=str(DEFAULT_ARCHIVE))
     p_search.add_argument("--json", action="store_true")
     p_search.set_defaults(func=cmd_search)
 
@@ -50,7 +58,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_collect = sub.add_parser("collect", help="search, read top pages, and archive evidence")
     p_collect.add_argument("query")
-    p_collect.add_argument("--provider", default="ddg", choices=["brave", "ddg", "github", "jina", "meta", "openalex", "searxng"])
+    p_collect.add_argument("--provider", default="ddg", choices=PROVIDER_CHOICES)
     p_collect.add_argument("--reader", default="auto", choices=["auto", "jina", "direct"])
     p_collect.add_argument("--limit", "-n", type=int, default=10)
     p_collect.add_argument("--read-top", type=int, default=3)
@@ -92,10 +100,45 @@ def build_parser() -> argparse.ArgumentParser:
     p_repos_query.add_argument("--json", action="store_true")
     p_repos_query.set_defaults(func=cmd_repos_query)
 
+    p_feeds = sub.add_parser("feeds", help="register, refresh, and query feed sources")
+    feeds_sub = p_feeds.add_subparsers(required=True)
+    p_feeds_add = feeds_sub.add_parser("add", help="add a feed source URL to the archive")
+    p_feeds_add.add_argument("url")
+    p_feeds_add.add_argument("--title", default="")
+    p_feeds_add.add_argument("--archive", default=str(DEFAULT_ARCHIVE))
+    p_feeds_add.add_argument("--json", action="store_true")
+    p_feeds_add.set_defaults(func=cmd_feeds_add)
+
+    p_feeds_refresh = feeds_sub.add_parser("refresh", help="fetch and index feed source items")
+    p_feeds_refresh.add_argument("--source")
+    p_feeds_refresh.add_argument("--archive", default=str(DEFAULT_ARCHIVE))
+    p_feeds_refresh.add_argument("--json", action="store_true")
+    p_feeds_refresh.set_defaults(func=cmd_feeds_refresh)
+
+    p_feeds_query = feeds_sub.add_parser("query", help="search archived feed items")
+    p_feeds_query.add_argument("terms")
+    p_feeds_query.add_argument("--archive", default=str(DEFAULT_ARCHIVE))
+    p_feeds_query.add_argument("--limit", "-n", type=int, default=10)
+    p_feeds_query.add_argument("--json", action="store_true")
+    p_feeds_query.set_defaults(func=cmd_feeds_query)
+
+    p_sources = sub.add_parser("sources", help="inspect trusted source registry entries")
+    sources_sub = p_sources.add_subparsers(required=True)
+    p_sources_list = sources_sub.add_parser("list", help="list source registry entries")
+    p_sources_list.add_argument("--domain")
+    p_sources_list.add_argument("--query-type")
+    p_sources_list.add_argument("--limit", "-n", type=int, default=20)
+    p_sources_list.add_argument("--json", action="store_true")
+    p_sources_list.set_defaults(func=cmd_sources_list)
+    p_sources_match = sources_sub.add_parser("match", help="match a URL against the source registry")
+    p_sources_match.add_argument("url")
+    p_sources_match.add_argument("--json", action="store_true")
+    p_sources_match.set_defaults(func=cmd_sources_match)
+
     p_brief = sub.add_parser("brief", help="combine web search and local repo hits into a research brief")
     p_brief.add_argument("query")
     p_brief.add_argument("--archive", default=str(DEFAULT_ARCHIVE))
-    p_brief.add_argument("--provider", default="ddg", choices=["brave", "ddg", "github", "jina", "meta", "openalex", "searxng"])
+    p_brief.add_argument("--provider", default="ddg", choices=PROVIDER_CHOICES)
     p_brief.add_argument("--web-limit", type=int, default=5)
     p_brief.add_argument("--repo-limit", type=int, default=5)
     p_brief.add_argument("--expand-queries", action="store_true")
@@ -111,7 +154,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_investigate.add_argument("query")
     p_investigate.add_argument("--archive", default=str(DEFAULT_ARCHIVE))
-    p_investigate.add_argument("--provider", default="ddg", choices=["brave", "ddg", "github", "jina", "meta", "openalex", "searxng"])
+    p_investigate.add_argument("--provider", default="ddg", choices=PROVIDER_CHOICES)
     p_investigate.add_argument("--reader", default="auto", choices=["auto", "jina", "direct"])
     p_investigate.add_argument("--web-limit", type=int, default=8)
     p_investigate.add_argument("--repo-limit", type=int, default=6)
@@ -139,7 +182,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def cmd_search(args: argparse.Namespace) -> int:
-    results = search(args.query, provider=args.provider, limit=args.limit)
+    with archive_env(args.archive):
+        results = search(args.query, provider=args.provider, limit=args.limit)
     if args.json:
         print_json([result.to_dict() for result in results])
     else:
@@ -157,7 +201,8 @@ def cmd_read(args: argparse.Namespace) -> int:
 
 
 def cmd_collect(args: argparse.Namespace) -> int:
-    results = search(args.query, provider=args.provider, limit=args.limit)
+    with archive_env(args.archive):
+        results = search(args.query, provider=args.provider, limit=args.limit)
     pages: list[PageSnapshot] = []
     archive = Archive(args.archive)
     try:
@@ -296,17 +341,147 @@ def cmd_repos_query(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_feeds_add(args: argparse.Namespace) -> int:
+    source = FeedSource(url=args.url, title=args.title, status="pending")
+    archive = Archive(args.archive)
+    try:
+        archive.upsert_feed_source(source)
+        sources = archive.feed_sources()
+    finally:
+        archive.close()
+    payload = {
+        "archive": args.archive,
+        "source": source.to_dict(),
+        "source_count": len(sources),
+    }
+    if args.json:
+        print_json(payload)
+    else:
+        print(f"archive: {args.archive}")
+        print(f"source: {args.url}")
+        print(f"source_count: {len(sources)}")
+    return 0
+
+
+def cmd_feeds_refresh(args: argparse.Namespace) -> int:
+    archive = Archive(args.archive)
+    refreshed = []
+    try:
+        if args.source:
+            sources = [FeedSource(url=args.source, status="pending")]
+            archive.upsert_feed_source(sources[0])
+        else:
+            sources = archive.feed_sources()
+        for source in sources:
+            try:
+                parsed = fetch_and_parse_feed(source.url)
+                archive.upsert_feed_source(parsed.source)
+                indexed = archive.upsert_feed_items(parsed.items)
+                refreshed.append(parsed.source.to_dict() | {"indexed_items": indexed})
+            except Exception as exc:
+                failed = FeedSource(
+                    url=source.url,
+                    title=source.title,
+                    kind=source.kind,
+                    last_fetched_at=utc_now_iso(),
+                    status="error",
+                    health_score=0.0,
+                    error_kind=exc.__class__.__name__,
+                )
+                archive.upsert_feed_source(failed)
+                refreshed.append(failed.to_dict() | {"indexed_items": 0})
+    finally:
+        archive.close()
+    payload = {
+        "archive": args.archive,
+        "refreshed": refreshed,
+        "source_count": len(refreshed),
+        "indexed_items": sum(int(row["indexed_items"]) for row in refreshed),
+    }
+    if args.json:
+        print_json(payload)
+    else:
+        print(f"archive: {args.archive}")
+        print(f"sources: {payload['source_count']}")
+        print(f"indexed_items: {payload['indexed_items']}")
+        for row in refreshed:
+            print(f"{row['url']}: {row['status']} items={row['indexed_items']}")
+    return 0
+
+
+def cmd_feeds_query(args: argparse.Namespace) -> int:
+    archive = Archive(args.archive)
+    try:
+        hits = archive.query_feeds(args.terms, limit=args.limit)
+    finally:
+        archive.close()
+    if args.json:
+        print_json([hit.to_dict() for hit in hits])
+    else:
+        for idx, hit in enumerate(hits, start=1):
+            print(f"{idx}. {hit.title}")
+            print(f"   {hit.url}")
+            print(f"   feed: {hit.source_title or hit.source_url}")
+            print(f"   {hit.snippet}")
+    return 0
+
+
+def cmd_sources_list(args: argparse.Namespace) -> int:
+    registry = source_registry()
+    sources = registry.recommend(domain=args.domain, query_type=args.query_type, limit=args.limit)
+    payload = {
+        "count": len(sources),
+        "domain": args.domain,
+        "query_type": args.query_type,
+        "sources": [source.to_dict() for source in sources],
+    }
+    if args.json:
+        print_json(payload)
+    else:
+        print(f"count: {len(sources)}")
+        for source in sources:
+            print(f"- {source.domain}/{source.source_type}: {source.name}")
+            print(f"  url: {source.url}")
+            if source.bias_caveat:
+                print(f"  caveat: {source.bias_caveat}")
+    return 0
+
+
+def cmd_sources_match(args: argparse.Namespace) -> int:
+    source = source_registry().match_url(args.url)
+    payload = {
+        "url": args.url,
+        "matched": source is not None,
+        "source": source.to_dict() if source else None,
+    }
+    if args.json:
+        print_json(payload)
+    else:
+        if source is None:
+            print("matched: false")
+        else:
+            print("matched: true")
+            print(f"source: {source.name}")
+            print(f"domain: {source.domain}")
+            print(f"source_type: {source.source_type}")
+            print(f"trust_score: {source.trust_score}")
+            if source.bias_caveat:
+                print(f"bias_caveat: {source.bias_caveat}")
+    return 0
+
+
 def cmd_brief(args: argparse.Namespace) -> int:
     search_plan = []
     web_results = []
     if not args.no_web:
-        web_results, search_plan = search_with_plan(
-            args.query,
-            provider=args.provider,
-            limit=args.web_limit,
-            expand_queries=args.expand_queries,
-            max_subqueries=args.max_subqueries,
-        )
+        with archive_env(args.archive):
+            web_results, search_plan = search_with_plan(
+                args.query,
+                provider=args.provider,
+                limit=args.web_limit,
+                expand_queries=args.expand_queries,
+                max_subqueries=args.max_subqueries,
+            )
     archive = Archive(args.archive)
     try:
         repo_hits = archive.query_repos(args.query, limit=args.repo_limit)
@@ -346,13 +521,14 @@ def cmd_investigate(args: argparse.Namespace) -> int:
     search_plan = []
     web_results = []
     if not args.no_web:
-        web_results, search_plan = search_with_plan(
-            args.query,
-            provider=args.provider,
-            limit=args.web_limit,
-            expand_queries=args.expand_queries,
-            max_subqueries=args.max_subqueries,
-        )
+        with archive_env(args.archive):
+            web_results, search_plan = search_with_plan(
+                args.query,
+                provider=args.provider,
+                limit=args.web_limit,
+                expand_queries=args.expand_queries,
+                max_subqueries=args.max_subqueries,
+            )
     archive = Archive(args.archive)
     pages: list[PageSnapshot] = []
     try:
@@ -453,6 +629,19 @@ def print_results(results: list[SearchResult]) -> None:
 
 def print_json(value: object) -> None:
     print(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True))
+
+
+@contextlib.contextmanager
+def archive_env(path: str):
+    previous = os.environ.get("KWR_ARCHIVE")
+    os.environ["KWR_ARCHIVE"] = path
+    try:
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop("KWR_ARCHIVE", None)
+        else:
+            os.environ["KWR_ARCHIVE"] = previous
 
 
 if __name__ == "__main__":

@@ -21,6 +21,22 @@ PYTHONPATH=src python3 -m katala_web_research.cli eval --min-score 80 --out /tmp
 grep -q "passed: true" /tmp/katala-web-research-eval.txt
 grep -q "Research Quality Benchmark" /tmp/katala-web-research-eval.md
 rm -f /tmp/katala-web-research-eval.txt /tmp/katala-web-research-eval.md
+PYTHONPATH=src python3 -m katala_web_research.cli sources list --domain security --json >/tmp/katala-web-research-sources.txt
+grep -q "CISA Known Exploited Vulnerabilities Catalog" /tmp/katala-web-research-sources.txt
+rm -f /tmp/katala-web-research-sources.txt
+PYTHONPATH=src python3 -m katala_web_research.cli sources match "https://www.cisa.gov/known-exploited-vulnerabilities-catalog" --json >/tmp/katala-web-research-source-match.txt
+grep -q '"matched": true' /tmp/katala-web-research-source-match.txt
+rm -f /tmp/katala-web-research-source-match.txt
+feed_smoke_dir="$(mktemp -d)"
+trap 'rm -rf "$feed_smoke_dir"' EXIT
+feed_smoke_archive="$feed_smoke_dir/archive.sqlite"
+PYTHONPATH=src python3 -m katala_web_research.cli feeds add "file://$ROOT/tests/fixtures/sample.rss.xml" --archive "$feed_smoke_archive" >/tmp/katala-web-research-feed-add.txt
+grep -q "source_count: 1" /tmp/katala-web-research-feed-add.txt
+PYTHONPATH=src python3 -m katala_web_research.cli feeds refresh --archive "$feed_smoke_archive" >/tmp/katala-web-research-feed-refresh.txt
+grep -q "indexed_items: 2" /tmp/katala-web-research-feed-refresh.txt
+PYTHONPATH=src python3 -m katala_web_research.cli search "RSSHub" --provider feed --archive "$feed_smoke_archive" >/tmp/katala-web-research-feed-search.txt
+grep -q "RSSHub adapter research" /tmp/katala-web-research-feed-search.txt
+rm -f /tmp/katala-web-research-feed-add.txt /tmp/katala-web-research-feed-refresh.txt /tmp/katala-web-research-feed-search.txt
 
 echo "== token budget benchmark =="
 scripts/benchmark-token-budget.py

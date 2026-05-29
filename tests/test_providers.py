@@ -121,6 +121,45 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(len(results), 2)
         self.assertIn("https://arxiv.org/abs/2510.18633", {result.url for result in results})
 
+    def test_meta_provider_records_engine_health(self):
+        class OkProvider:
+            name = "ok"
+
+            def search(self, query, *, limit=10):
+                return [SearchResult(title="Ok result", url="https://example.com/ok", source=self.name, rank=1)]
+
+        class EmptyProvider:
+            name = "empty"
+
+            def search(self, query, *, limit=10):
+                return []
+
+        class FailingProvider:
+            name = "boom"
+
+            def search(self, query, *, limit=10):
+                raise RuntimeError("provider failed")
+
+        fake_providers = {
+            "ok": OkProvider(),
+            "empty": EmptyProvider(),
+            "boom": FailingProvider(),
+            "meta": MetaSearch(),
+        }
+        with patch.dict(os.environ, {"KWR_META_PROVIDERS": "ok,empty,boom"}, clear=False):
+            with patch("katala_web_research.providers.PROVIDERS", fake_providers):
+                results = MetaSearch().search("alpha", limit=5)
+
+        self.assertEqual(len(results), 1)
+        metadata = results[0].metadata
+        runs = {row["provider"]: row for row in metadata["meta_engine_runs"]}
+        self.assertEqual(runs["ok"]["status"], "ok")
+        self.assertGreater(runs["ok"]["health_score"], 0)
+        self.assertEqual(runs["empty"]["status"], "empty")
+        self.assertEqual(runs["boom"]["status"], "error")
+        self.assertEqual(runs["boom"]["error_kind"], "RuntimeError")
+        self.assertEqual(metadata["engine_health"], {"ok": runs["ok"]["health_score"]})
+
     def test_meta_profile_rewrites_queries(self):
         seen_queries = {}
 

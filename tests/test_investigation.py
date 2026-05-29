@@ -38,6 +38,19 @@ class InvestigationTests(unittest.TestCase):
         self.assertIn("Captured Pages", report)
         self.assertIn("Search API content", report)
 
+    def test_investigation_report_includes_registry_caveat(self):
+        report = build_investigation_report(
+            query="news bias",
+            provider="ddg",
+            archive_path="archive.sqlite",
+            web_results=[SearchResult(title="Ground News", url="https://ground.news/", source="ddg", rank=1)],
+            repo_hits=[],
+            pages=[],
+        )
+
+        self.assertIn("registry_source: Ground News", report)
+        self.assertIn("bias_caveat: News domain only", report)
+
 
 if __name__ == "__main__":
     unittest.main()
