@@ -48,6 +48,66 @@ class FeedTests(unittest.TestCase):
         self.assertEqual(parsed.source.kind, "json")
         self.assertEqual(parsed.items[0].title, "JSON feed provider")
 
+    def test_json_feed_does_not_fabricate_url_from_id(self):
+        parsed = parse_feed_text(
+            '{"version":"https://jsonfeed.org/version/1.1","title":"Katala","items":[{"id":"post-1","title":"Only ID","content_text":"No URL"}]}',
+            source_url="https://example.com/feed.json",
+            fetched_at="2026-05-28T00:00:00+00:00",
+        )
+
+        self.assertEqual(parsed.items, [])
+        self.assertEqual(parsed.source.last_item_count, 0)
+
+    def test_rss_guid_without_permalink_is_not_used_as_url(self):
+        parsed = parse_feed_text(
+            """
+            <rss version="2.0">
+              <channel>
+                <title>Katala</title>
+                <item>
+                  <title>GUID only</title>
+                  <guid isPermaLink="false">post-1</guid>
+                  <description>No URL</description>
+                </item>
+                <item>
+                  <title>Permalink GUID</title>
+                  <guid>https://example.com/permalink-guid</guid>
+                  <description>Real URL</description>
+                </item>
+              </channel>
+            </rss>
+            """,
+            source_url="https://example.com/feed.xml",
+            fetched_at="2026-05-28T00:00:00+00:00",
+        )
+
+        self.assertEqual(len(parsed.items), 1)
+        self.assertEqual(parsed.items[0].url, "https://example.com/permalink-guid")
+
+    def test_atom_id_is_not_used_as_url_unless_it_is_url(self):
+        parsed = parse_feed_text(
+            """
+            <feed xmlns="http://www.w3.org/2005/Atom">
+              <title>Katala Atom</title>
+              <entry>
+                <title>Tag ID only</title>
+                <id>tag:example.com,2026:post-1</id>
+                <summary>No URL</summary>
+              </entry>
+              <entry>
+                <title>URL ID</title>
+                <id>https://example.com/atom-id-url</id>
+                <summary>URL ID</summary>
+              </entry>
+            </feed>
+            """,
+            source_url="https://example.com/atom.xml",
+            fetched_at="2026-05-28T00:00:00+00:00",
+        )
+
+        self.assertEqual(len(parsed.items), 1)
+        self.assertEqual(parsed.items[0].url, "https://example.com/atom-id-url")
+
     def test_archive_query_and_feed_provider(self):
         with tempfile.TemporaryDirectory() as tmp:
             archive_path = Path(tmp) / "archive.sqlite"
@@ -89,6 +149,16 @@ class FeedTests(unittest.TestCase):
     def test_malformed_feed_fails_cleanly(self):
         with self.assertRaises(ValueError):
             parse_feed_text("<rss><broken>", source_url="https://example.com/feed.xml")
+
+    def test_non_feed_xml_fails_cleanly(self):
+        with self.assertRaises(ValueError):
+            parse_feed_text("<urlset><url><loc>https://example.com/a</loc></url></urlset>", source_url="https://example.com/sitemap.xml")
+
+    def test_leading_whitespace_and_bom_are_accepted(self):
+        rss = '\ufeff\n<?xml version="1.0"?><rss version="2.0"><channel><title>Katala</title></channel></rss>'
+        parsed = parse_feed_text(rss, source_url="https://example.com/feed.xml")
+
+        self.assertEqual(parsed.source.kind, "rss")
 
 
 if __name__ == "__main__":

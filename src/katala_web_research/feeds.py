@@ -19,22 +19,29 @@ class FeedParseResult:
 
 def fetch_and_parse_feed(url: str) -> FeedParseResult:
     fetched_at = utc_now_iso()
-    response = fetch_url(url, headers={"Accept": "application/rss+xml, application/atom+xml, application/feed+json, application/json, text/xml, */*"})
+    response = fetch_url(
+        url,
+        headers={
+            "Accept": "application/rss+xml, application/atom+xml, application/feed+json, application/json, text/xml, */*"
+        },
+    )
     return parse_feed_text(response.text, source_url=url, fetched_at=fetched_at)
 
 
 def parse_feed_text(text: str, *, source_url: str, fetched_at: str | None = None) -> FeedParseResult:
     fetched_at = fetched_at or utc_now_iso()
-    stripped = text.lstrip()
+    stripped = text.lstrip("\ufeff").lstrip()
     if stripped.startswith("{"):
         return _parse_json_feed(stripped, source_url=source_url, fetched_at=fetched_at)
     try:
-        root = ElementTree.fromstring(text)
+        root = ElementTree.fromstring(stripped)
     except ElementTree.ParseError as exc:
         raise ValueError(f"invalid feed XML: {exc}") from exc
-    root_name = _local_name(root.tag)
+    root_name = _local_name(root.tag).lower()
     if root_name == "feed":
         return _parse_atom(root, source_url=source_url, fetched_at=fetched_at)
+    if root_name not in {"rss", "rdf"} and _first_child(root, "channel") is None and not _children(root, "item"):
+        raise ValueError(f"unsupported feed XML root: {_local_name(root.tag)}")
     return _parse_rss(root, source_url=source_url, fetched_at=fetched_at)
 
 
@@ -58,10 +65,7 @@ def _parse_json_feed(text: str, *, source_url: str, fetched_at: str) -> FeedPars
     for item in payload.get("items") or []:
         if not isinstance(item, dict):
             continue
-        item_url = _item_url(
-            source_url,
-            str(item.get("url") or item.get("external_url") or item.get("id") or ""),
-        )
+        item_url = _item_url(source_url, str(item.get("url") or item.get("external_url") or ""))
         if not item_url:
             continue
         title = collapse_space(str(item.get("title") or item_url))
@@ -105,7 +109,7 @@ def _parse_rss(root: ElementTree.Element, *, source_url: str, fetched_at: str) -
     for item in _children(root, "item") + ([] if channel is root else _children(channel, "item")):
         item_url = _item_url(
             source_url,
-            _child_text(item, "link") or _child_text(item, "guid"),
+            _child_text(item, "link") or _rss_guid_url(source_url, item),
         )
         if not item_url:
             continue
@@ -142,7 +146,7 @@ def _parse_atom(root: ElementTree.Element, *, source_url: str, fetched_at: str) 
     )
     items = []
     for entry in _children(root, "entry"):
-        item_url = _item_url(source_url, _atom_link(entry) or _child_text(entry, "id"))
+        item_url = _item_url(source_url, _atom_link(entry) or _url_like_child_text(entry, "id"))
         if not item_url:
             continue
         title = _child_text(entry, "title") or item_url
@@ -180,6 +184,22 @@ def _atom_link(entry: ElementTree.Element) -> str:
     return fallback
 
 
+def _rss_guid_url(source_url: str, item: ElementTree.Element) -> str:
+    guid = _first_child(item, "guid")
+    if guid is None:
+        return ""
+    is_permalink = guid.attrib.get("isPermaLink", "true").strip().lower()
+    value = collapse_space("".join(guid.itertext()))
+    if is_permalink == "false" or not _looks_like_url(value):
+        return ""
+    return _item_url(source_url, value)
+
+
+def _url_like_child_text(element: ElementTree.Element, name: str) -> str:
+    value = _child_text(element, name)
+    return value if _looks_like_url(value) else ""
+
+
 def _item_url(source_url: str, value: str) -> str:
     value = collapse_space(value)
     if not value:
@@ -187,6 +207,10 @@ def _item_url(source_url: str, value: str) -> str:
     if "://" not in value and not value.startswith("//"):
         value = urljoin(source_url, value)
     return normalize_url(value)
+
+
+def _looks_like_url(value: str) -> bool:
+    return "://" in value or value.startswith(("/", "//"))
 
 
 def _normalize_date(value: object) -> str | None:
