@@ -208,6 +208,7 @@ def call_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 limit=int(arguments.get("web_limit", 5)),
                 expand_queries=bool(arguments.get("expand_queries", False)),
                 max_subqueries=int(arguments.get("max_subqueries", 4)),
+                archive_path=archive_path,
             )
         archive = Archive(archive_path)
         try:
@@ -236,6 +237,7 @@ def call_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 limit=int(arguments.get("web_limit", 8)),
                 expand_queries=bool(arguments.get("expand_queries", False)),
                 max_subqueries=int(arguments.get("max_subqueries", 4)),
+                archive_path=archive_path,
             )
         archive = Archive(archive_path)
         pages: list[PageSnapshot] = []

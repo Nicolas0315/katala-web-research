@@ -39,6 +39,16 @@ class SourceRegistryTests(unittest.TestCase):
         self.assertIsNotNone(source)
         self.assertEqual(source.name, "CISA Known Exploited Vulnerabilities Catalog")
 
+    def test_path_specific_registry_source_does_not_match_entire_host(self):
+        registry = default_source_registry()
+
+        source = registry.match_url("https://www.cisa.gov/news-events")
+        label, score = classify_url("https://www.cisa.gov/news-events")
+
+        self.assertIsNone(source)
+        self.assertEqual(label, "institutional")
+        self.assertLess(score, 96)
+
     def test_source_quality_uses_registry_scores(self):
         label, score = classify_url("https://www.cisa.gov/known-exploited-vulnerabilities-catalog")
 

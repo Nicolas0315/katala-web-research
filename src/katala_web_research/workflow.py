@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import os
 from math import ceil
 
 from .models import SearchResult
@@ -15,16 +17,34 @@ def search_with_plan(
     limit: int,
     expand_queries: bool = False,
     max_subqueries: int = 4,
+    archive_path: str | None = None,
 ) -> tuple[list[SearchResult], list[SearchPlanStep]]:
-    if not expand_queries:
-        return search(query, provider=provider, limit=limit), []
+    with _archive_env(archive_path):
+        if not expand_queries:
+            return search(query, provider=provider, limit=limit), []
 
-    plan = build_search_plan(query, max_subqueries=max_subqueries)
-    if not plan:
-        return [], []
+        plan = build_search_plan(query, max_subqueries=max_subqueries)
+        if not plan:
+            return [], []
 
-    per_query_limit = max(2, ceil(max(limit, 1) / len(plan)) + 2)
-    combined: list[SearchResult] = []
-    for step in plan:
-        combined.extend(search(step.query, provider=provider, limit=per_query_limit))
-    return rank_results(query, combined)[:limit], plan
+        per_query_limit = max(2, ceil(max(limit, 1) / len(plan)) + 2)
+        combined: list[SearchResult] = []
+        for step in plan:
+            combined.extend(search(step.query, provider=provider, limit=per_query_limit))
+        return rank_results(query, combined)[:limit], plan
+
+
+@contextlib.contextmanager
+def _archive_env(path: str | None):
+    if not path:
+        yield
+        return
+    previous = os.environ.get("KWR_ARCHIVE")
+    os.environ["KWR_ARCHIVE"] = path
+    try:
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop("KWR_ARCHIVE", None)
+        else:
+            os.environ["KWR_ARCHIVE"] = previous

@@ -67,19 +67,24 @@ class SourceRegistry:
 
     def match_url(self, url: str) -> SourceRegistryEntry | None:
         normalized = _normalize_url(url)
-        host = _normalize_host(urlparse(normalized).netloc)
+        parsed = urlparse(normalized)
+        host = _normalize_host(parsed.netloc)
         if not host:
             return None
 
         prefix_matches = [
             source
             for source in self.sources
-            if any(normalized.startswith(prefix) for prefix in source.url_prefixes)
+            if any(_matches_url_prefix(parsed, host, prefix) for prefix in source.url_prefixes)
         ]
         if prefix_matches:
             return _highest_trust(prefix_matches)
 
-        host_matches = [source for source in self.sources if host in source.hosts]
+        host_matches = [
+            source
+            for source in self.sources
+            if host in source.hosts and _allows_host_fallback(source)
+        ]
         if host_matches:
             return _highest_trust(host_matches)
         return None
@@ -148,3 +153,20 @@ def _normalize_url(url: str) -> str:
 
 def _normalize_host(host: str) -> str:
     return host.lower().removeprefix("www.")
+
+
+def _matches_url_prefix(parsed_url, host: str, prefix: str) -> bool:
+    parsed_prefix = urlparse(_normalize_url(prefix))
+    if host != _normalize_host(parsed_prefix.netloc):
+        return False
+    prefix_path = parsed_prefix.path.rstrip("/")
+    url_path = parsed_url.path.rstrip("/")
+    if not prefix_path:
+        return True
+    return url_path == prefix_path or url_path.startswith(prefix_path + "/")
+
+
+def _allows_host_fallback(source: SourceRegistryEntry) -> bool:
+    if not source.url_prefixes:
+        return True
+    return any(urlparse(_normalize_url(prefix)).path in {"", "/"} for prefix in source.url_prefixes)
