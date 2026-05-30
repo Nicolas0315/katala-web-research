@@ -141,6 +141,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_brief.add_argument("--provider", default="ddg", choices=PROVIDER_CHOICES)
     p_brief.add_argument("--web-limit", type=int, default=5)
     p_brief.add_argument("--repo-limit", type=int, default=5)
+    p_brief.add_argument("--feed-limit", type=int, default=0)
     p_brief.add_argument("--expand-queries", action="store_true")
     p_brief.add_argument("--max-subqueries", type=int, default=4)
     p_brief.add_argument("--no-web", action="store_true")
@@ -158,6 +159,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_investigate.add_argument("--reader", default="auto", choices=["auto", "jina", "direct"])
     p_investigate.add_argument("--web-limit", type=int, default=8)
     p_investigate.add_argument("--repo-limit", type=int, default=6)
+    p_investigate.add_argument("--feed-limit", type=int, default=0)
     p_investigate.add_argument("--read-top", type=int, default=3)
     p_investigate.add_argument("--expand-queries", action="store_true")
     p_investigate.add_argument("--max-subqueries", type=int, default=4)
@@ -485,6 +487,7 @@ def cmd_brief(args: argparse.Namespace) -> int:
     archive = Archive(args.archive)
     try:
         repo_hits = archive.query_repos(args.query, limit=args.repo_limit)
+        feed_hits = archive.query_feeds(args.query, limit=args.feed_limit) if args.feed_limit > 0 else []
     finally:
         archive.close()
     brief = build_brief(
@@ -493,6 +496,7 @@ def cmd_brief(args: argparse.Namespace) -> int:
         repo_hits=repo_hits,
         archive_path=args.archive,
         search_plan=search_plan,
+        feed_hits=feed_hits,
     )
     if args.out:
         out = Path(args.out)
@@ -506,6 +510,7 @@ def cmd_brief(args: argparse.Namespace) -> int:
                 "out": args.out,
                 "web_results": [result.to_dict() for result in web_results],
                 "repo_hits": [hit.to_dict() for hit in repo_hits],
+                "feed_hits": [hit.to_dict() for hit in feed_hits],
                 "search_plan": [step.to_dict() for step in search_plan],
             }
         )
@@ -533,6 +538,7 @@ def cmd_investigate(args: argparse.Namespace) -> int:
     pages: list[PageSnapshot] = []
     try:
         repo_hits = archive.query_repos(args.query, limit=args.repo_limit)
+        feed_hits = archive.query_feeds(args.query, limit=args.feed_limit) if args.feed_limit > 0 else []
         if web_results:
             archive.store_run(args.query, args.provider, web_results)
         for result in sort_web_candidates(web_results)[: max(args.read_top, 0)]:
@@ -559,6 +565,7 @@ def cmd_investigate(args: argparse.Namespace) -> int:
         repo_hits=repo_hits,
         pages=pages,
         search_plan=search_plan,
+        feed_hits=feed_hits,
     )
     out_path = None
     if args.out:
@@ -574,6 +581,7 @@ def cmd_investigate(args: argparse.Namespace) -> int:
                 "out": str(out_path) if out_path else None,
                 "web_results": [result.to_dict() for result in web_results],
                 "repo_hits": [hit.to_dict() for hit in repo_hits],
+                "feed_hits": [hit.to_dict() for hit in feed_hits],
                 "pages": [page.to_dict() for page in pages],
                 "search_plan": [step.to_dict() for step in search_plan],
             }

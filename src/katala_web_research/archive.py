@@ -257,43 +257,14 @@ class Archive:
         self.conn.commit()
 
     def upsert_repo_document(self, document: RepoDocument) -> None:
-        self.conn.execute(
-            """
-            INSERT INTO repo_documents(
-              repo_path, repo_name, rel_path, title, content, kind, indexed_at, context,
-              file_size, file_mtime_ns, content_sha256
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(repo_path, rel_path) DO UPDATE SET
-              repo_name=excluded.repo_name,
-              title=excluded.title,
-              content=excluded.content,
-              kind=excluded.kind,
-              indexed_at=excluded.indexed_at,
-              context=excluded.context,
-              file_size=excluded.file_size,
-              file_mtime_ns=excluded.file_mtime_ns,
-              content_sha256=excluded.content_sha256
-            """,
-            (
-                document.repo_path,
-                document.repo_name,
-                document.rel_path,
-                document.title,
-                document.content,
-                document.kind,
-                document.indexed_at,
-                document.context,
-                document.file_size,
-                document.file_mtime_ns,
-                document.content_sha256,
-            ),
-        )
+        self.conn.execute(_REPO_UPSERT_SQL, _repo_upsert_params(document))
         self.conn.commit()
 
-    def upsert_repo_documents(self, documents: list[RepoDocument]) -> int:
-        for document in documents:
-            self.upsert_repo_document(document)
+    def upsert_repo_documents(self, documents: list[RepoDocument], *, batch_size: int = 500) -> int:
+        for start in range(0, len(documents), batch_size):
+            batch = documents[start : start + batch_size]
+            self.conn.executemany(_REPO_UPSERT_SQL, [_repo_upsert_params(doc) for doc in batch])
+        self.conn.commit()
         return len(documents)
 
     def upsert_feed_source(self, source: FeedSource) -> None:
@@ -497,6 +468,41 @@ class Archive:
             )
             for row in rows
         ]
+
+
+_REPO_UPSERT_SQL = """
+INSERT INTO repo_documents(
+  repo_path, repo_name, rel_path, title, content, kind, indexed_at, context,
+  file_size, file_mtime_ns, content_sha256
+)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(repo_path, rel_path) DO UPDATE SET
+  repo_name=excluded.repo_name,
+  title=excluded.title,
+  content=excluded.content,
+  kind=excluded.kind,
+  indexed_at=excluded.indexed_at,
+  context=excluded.context,
+  file_size=excluded.file_size,
+  file_mtime_ns=excluded.file_mtime_ns,
+  content_sha256=excluded.content_sha256
+"""
+
+
+def _repo_upsert_params(document: RepoDocument) -> tuple:
+    return (
+        document.repo_path,
+        document.repo_name,
+        document.rel_path,
+        document.title,
+        document.content,
+        document.kind,
+        document.indexed_at,
+        document.context,
+        document.file_size,
+        document.file_mtime_ns,
+        document.content_sha256,
+    )
 
 
 def _fts_query(terms: str) -> str:

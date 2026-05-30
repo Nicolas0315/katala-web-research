@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from urllib.parse import urlparse
+import json
+from json import JSONDecodeError
+from urllib.parse import quote, urlparse
 
 from .http import FetchError, fetch_url
 from .models import PageSnapshot, utc_now_iso
@@ -21,9 +23,10 @@ def read_url(url: str, *, reader: str = "auto") -> PageSnapshot:
 
 
 def read_with_jina(url: str) -> PageSnapshot:
-    jina_url = "https://r.jina.ai/" + url
+    jina_url = "https://r.jina.ai/" + quote(url, safe="")
     response = fetch_url(jina_url, headers={"Accept": "text/plain"})
     content = response.text.strip()
+    _raise_for_jina_error_payload(content, url)
     title = _title_from_markdown(content) or url
     return PageSnapshot(
         url=url,
@@ -72,3 +75,26 @@ def _title_from_markdown(content: str) -> str:
             return stripped[:160]
     return ""
 
+
+def _raise_for_jina_error_payload(content: str, url: str) -> None:
+    stripped = content.lstrip()
+    if not stripped.startswith("{"):
+        return
+    try:
+        payload = json.loads(stripped)
+    except JSONDecodeError:
+        return
+    if not isinstance(payload, dict) or not _looks_like_jina_error(payload):
+        return
+    reason = payload.get("readableMessage") or payload.get("message") or content[:120]
+    raise FetchError(f"jina reader returned an error payload for {url}: {reason}")
+
+
+def _looks_like_jina_error(payload: dict[str, object]) -> bool:
+    status = payload.get("status")
+    code = payload.get("code")
+    name = payload.get("name")
+    has_failure_status = any(isinstance(value, int) and value >= 400 for value in (status, code))
+    has_error_identity = isinstance(name, str) and (name.endswith("Error") or "Error" in name)
+    has_jina_message = "readableMessage" in payload or "message" in payload
+    return has_failure_status and has_error_identity and has_jina_message

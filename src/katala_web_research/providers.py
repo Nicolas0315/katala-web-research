@@ -19,6 +19,12 @@ from .rank import rank_results
 from .text import collapse_space, normalize_url
 
 
+# Keep CLI subprocesses above the 20s HTTP fetch timeout so a slow-but-live
+# network call is not cut off, while still bounding a hung gh/op process.
+GH_TIMEOUT = 30
+OP_TIMEOUT = 10
+
+
 class SearchProvider(Protocol):
     name: str
 
@@ -62,7 +68,12 @@ class GitHubRepoSearch:
             "--json",
             "fullName,description,url,stargazersCount,updatedAt,isFork",
         ]
-        completed = subprocess.run(cmd, text=True, capture_output=True, check=False)
+        try:
+            completed = subprocess.run(
+                cmd, text=True, capture_output=True, check=False, timeout=GH_TIMEOUT
+            )
+        except subprocess.TimeoutExpired:
+            return []
         if completed.returncode != 0:
             return []
         items = json.loads(completed.stdout or "[]")
@@ -628,7 +639,12 @@ def _secret_env(name: str) -> str:
         return value
     if not shutil.which("op"):
         return ""
-    completed = subprocess.run(["op", "read", value], text=True, capture_output=True, check=False)
+    try:
+        completed = subprocess.run(
+            ["op", "read", value], text=True, capture_output=True, check=False, timeout=OP_TIMEOUT
+        )
+    except subprocess.TimeoutExpired:
+        return ""
     if completed.returncode != 0:
         return ""
     return completed.stdout.strip()
