@@ -30,7 +30,8 @@ def reciprocal_rank_fusion(
             engine_ranks.setdefault(key, {})[source] = min(
                 engine_rank, engine_ranks.get(key, {}).get(source, engine_rank)
             )
-            engine_health_by_key.setdefault(key, {})[source] = health_score
+            by_source = engine_health_by_key.setdefault(key, {})
+            by_source[source] = max(by_source.get(source, health_score), health_score)
             current = best.get(key)
             if current is None or engine_rank < (current.rank or fallback_rank):
                 best[key] = replace(result, metadata=dict(result.metadata))

@@ -8,7 +8,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass, replace
 from html.parser import HTMLParser
-from typing import Protocol
+from typing import Any, Protocol
 from urllib.parse import urlencode
 
 from .archive import DEFAULT_ARCHIVE, Archive
@@ -98,7 +98,7 @@ class GitHubRepoSearch:
         if token:
             headers["Authorization"] = f"Bearer {token}"
         response = fetch_url(url, headers=headers)
-        payload = json.loads(response.text)
+        payload = _parse_json(response.text, url)
         results = []
         for idx, item in enumerate(payload.get("items", []), start=1):
             results.append(
@@ -162,7 +162,7 @@ class JinaSearch:
             url,
             headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
         )
-        payload = json.loads(response.text)
+        payload = _parse_json(response.text, url)
         data = payload.get("data", payload if isinstance(payload, list) else [])
         results = []
         for idx, item in enumerate(data[:limit], start=1):
@@ -188,7 +188,7 @@ class SearxngSearch:
             raise FetchError("KWR_SEARXNG_URL is required for SearXNG search")
         url = base_url + "/search?" + urlencode(_searxng_params(query))
         response = fetch_url(url, headers={"Accept": "application/json"})
-        payload = json.loads(response.text)
+        payload = _parse_json(response.text, url)
         results = []
         for idx, item in enumerate(payload.get("results", [])[:limit], start=1):
             results.append(
@@ -221,7 +221,7 @@ class BraveSearch:
                 "X-Subscription-Token": token,
             },
         )
-        payload = json.loads(response.text)
+        payload = _parse_json(response.text, url)
         web_results = (payload.get("web") or {}).get("results", [])
         results = []
         for idx, item in enumerate(web_results[:limit], start=1):
@@ -270,7 +270,7 @@ class OpenAlexSearch:
             }
         )
         response = fetch_url(url, headers={"Accept": "application/json"})
-        payload = json.loads(response.text)
+        payload = _parse_json(response.text, url)
         results = []
         for idx, item in enumerate(payload.get("results", [])[:limit], start=1):
             results.append(
@@ -573,6 +573,7 @@ class _DuckDuckGoHTMLParser(HTMLParser):
         self.results: list[SearchResult] = []
         self._in_title = False
         self._in_snippet = False
+        self._snippet_tag = ""
         self._current_title: list[str] = []
         self._current_url = ""
         self._current_snippet: list[str] = []
@@ -586,11 +587,14 @@ class _DuckDuckGoHTMLParser(HTMLParser):
             self._current_url = normalize_url(attr.get("href") or "")
         elif "result__snippet" in classes:
             self._in_snippet = True
+            self._snippet_tag = tag
 
     def handle_endtag(self, tag: str) -> None:
         if tag == "a" and self._in_title:
             self._in_title = False
-        if tag in {"a", "div"} and self._in_snippet:
+        # Close only on the snippet's own opening tag so a nested </a> or </b>
+        # inside the snippet does not truncate it.
+        if self._in_snippet and tag == self._snippet_tag:
             self._in_snippet = False
 
     def handle_data(self, data: str) -> None:
@@ -617,6 +621,13 @@ class _DuckDuckGoHTMLParser(HTMLParser):
         self._current_title = []
         self._current_url = ""
         self._current_snippet = []
+
+
+def _parse_json(text: str, url: str) -> Any:
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise FetchError(f"non-JSON response from {url}: {exc}") from exc
 
 
 def _github_snippet(item: dict) -> str:

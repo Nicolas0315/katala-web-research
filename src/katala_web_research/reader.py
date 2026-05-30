@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import codecs
 import json
+import re
 from json import JSONDecodeError
 from urllib.parse import quote, urlparse
 
 from .http import FetchError, fetch_url
 from .models import PageSnapshot, utc_now_iso
 from .text import SimpleHTMLTextExtractor
+
+_META_CHARSET_RE = re.compile(rb"""<meta[^>]+charset=["']?\s*([a-zA-Z0-9_-]+)""", re.IGNORECASE)
 
 
 def read_url(url: str, *, reader: str = "auto") -> PageSnapshot:
@@ -43,6 +47,10 @@ def read_direct(url: str) -> PageSnapshot:
     response = fetch_url(url, headers={"Accept": "text/html, text/plain;q=0.9, */*;q=0.5"})
     content_type = response.headers.get("content-type", "")
     text = response.text
+    if "charset=" not in content_type.lower():
+        sniffed = _sniff_meta_charset(response.body)
+        if sniffed:
+            text = response.body.decode(sniffed, errors="replace")
     if "html" in content_type.lower() or "<html" in text[:500].lower():
         parser = SimpleHTMLTextExtractor()
         parser.feed(text)
@@ -60,6 +68,18 @@ def read_direct(url: str) -> PageSnapshot:
         status_code=response.status,
         content_type=content_type,
     )
+
+
+def _sniff_meta_charset(body: bytes) -> str | None:
+    match = _META_CHARSET_RE.search(body[:4096])
+    if not match:
+        return None
+    charset = match.group(1).decode("ascii", errors="ignore")
+    try:
+        codecs.lookup(charset)
+    except LookupError:
+        return None
+    return charset
 
 
 def _require_http_url(url: str) -> None:

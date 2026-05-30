@@ -3,7 +3,7 @@ from __future__ import annotations
 from .models import FeedHit, PageSnapshot, RepoHit, SearchResult, utc_now_iso
 from .planner import SearchPlanStep, format_search_plan
 from .source_quality import classify_url
-from .source_registry import source_registry_metadata
+from .source_registry import registry_lines, source_registry_metadata
 
 
 def sort_web_candidates(results: list[SearchResult]) -> list[SearchResult]:
@@ -75,7 +75,7 @@ def build_investigation_report(
                     f"- published_at: {result.published_at or 'unknown'}",
                 ]
             )
-            lines.extend(_registry_lines(result.url))
+            lines.extend(registry_lines(result.url))
             lines.extend([f"- snippet: {result.snippet or 'none'}", ""])
     else:
         lines.extend(["No web results.", ""])
@@ -100,15 +100,15 @@ def build_investigation_report(
 
     lines.extend(["## Feed Evidence", ""])
     if feed_hits:
-        for hit in feed_hits:
+        for feed_hit in feed_hits:
             lines.extend(
                 [
-                    f"### {hit.title}",
+                    f"### {feed_hit.title}",
                     "",
-                    f"- url: {hit.url}",
-                    f"- feed: {hit.source_title or hit.source_url}",
-                    f"- published_at: {hit.published_at or 'unknown'}",
-                    f"- snippet: {hit.snippet or 'none'}",
+                    f"- url: {feed_hit.url}",
+                    f"- feed: {feed_hit.source_title or feed_hit.source_url}",
+                    f"- published_at: {feed_hit.published_at or 'unknown'}",
+                    f"- snippet: {feed_hit.snippet or 'none'}",
                     "",
                 ]
             )
@@ -151,17 +151,3 @@ def build_investigation_report(
 def _candidate_sort_key(result: SearchResult) -> tuple[int, float, int, str]:
     _source_type, quality = classify_url(result.url)
     return (-quality, -result.score, result.rank, result.url)
-
-
-def _registry_lines(url: str) -> list[str]:
-    metadata = source_registry_metadata(url)
-    if metadata is None:
-        return []
-    return [
-        f"- registry_source: {metadata['registry_source']}",
-        f"- registry_domain: {metadata['registry_domain']}",
-        f"- registry_freshness: {metadata['registry_freshness']}",
-        f"- registry_update_cadence: {metadata['registry_update_cadence']}",
-        f"- registry_trust_score: {metadata['registry_trust_score']}",
-        f"- bias_caveat: {metadata['bias_caveat']}",
-    ]

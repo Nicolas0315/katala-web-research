@@ -137,7 +137,7 @@ scripts/verify.sh
 
 Observed result:
 
-- `Ran 56 tests`
+- `Ran 72 tests`
 - `OK`
 - `katala-web-research verification passed`
 

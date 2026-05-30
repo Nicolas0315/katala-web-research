@@ -18,14 +18,15 @@ def search_with_plan(
     expand_queries: bool = False,
     max_subqueries: int = 4,
     archive_path: str | None = None,
+    year: int | None = None,
 ) -> tuple[list[SearchResult], list[SearchPlanStep]]:
     with _archive_env(archive_path):
         if not expand_queries:
             return search(query, provider=provider, limit=limit), []
 
-        plan = build_search_plan(query, max_subqueries=max_subqueries)
+        plan = build_search_plan(query, max_subqueries=max_subqueries, year=year)
         if not plan:
-            return [], []
+            return search(query, provider=provider, limit=limit), []
 
         per_query_limit = max(2, ceil(max(limit, 1) / len(plan)) + 2)
         combined: list[SearchResult] = []

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+from collections import deque
 from hashlib import sha256
 from pathlib import Path
 
@@ -222,7 +223,6 @@ def scan_repo(
             continue
         if stat.st_size <= 0 or stat.st_size > max_bytes_per_file:
             continue
-        considered += 1
         rel_path = path.relative_to(repo).as_posix()
         key = (repo_path_str, rel_path)
         old = existing_metadata.get(key)
@@ -244,6 +244,7 @@ def scan_repo(
             continue
         title = extract_title(content, fallback=rel_path)
         kind = classify_file(path)
+        considered += 1
         docs.append(
             RepoDocument(
                 repo_path=repo_path_str,
@@ -312,10 +313,10 @@ def iter_candidate_files(repo: Path):
 
 
 def iter_limited_files(base: Path, *, max_depth: int, max_dirs: int = 50, max_entries_per_dir: int = 200):
-    queue: list[tuple[Path, int]] = [(base, 0)]
+    queue: deque[tuple[Path, int]] = deque([(base, 0)])
     visited = 0
     while queue and visited < max_dirs:
-        current, depth = queue.pop(0)
+        current, depth = queue.popleft()
         visited += 1
         try:
             with os.scandir(current) as entries:
@@ -357,7 +358,7 @@ def classify_file(path: Path) -> str:
     name = path.name.lower()
     if name.startswith("readme"):
         return "readme"
-    if name == "agents.md":
+    if name in {"agents.md", "claude.md", "gemini.md"}:
         return "agent-context"
     if name == "skill.md":
         return "skill"

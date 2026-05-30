@@ -15,6 +15,9 @@ class FreshnessBonusTests(unittest.TestCase):
     def test_two_year_old_gets_no_bonus(self):
         self.assertEqual(_freshness_bonus(f"{date.today().year - 2}-06-01"), 0.0)
 
+    def test_future_year_gets_no_bonus(self):
+        self.assertEqual(_freshness_bonus(f"{date.today().year + 1}-01-01"), 0.0)
+
     def test_non_iso_and_missing_dates_are_ignored(self):
         self.assertEqual(_freshness_bonus("recently"), 0.0)
         self.assertEqual(_freshness_bonus("20"), 0.0)
@@ -38,6 +41,18 @@ class OverlapNormalizationTests(unittest.TestCase):
         self.assertGreater(
             source_quality_score(query, primary),
             source_quality_score(query, keyword_stuffed),
+        )
+
+    def test_substring_does_not_count_as_token_overlap(self):
+        query = "on"
+        substring_only = SearchResult(
+            title="Optimization and personalization", url="https://example.com/x", snippet="comparison"
+        )
+        real_token = SearchResult(title="On the record", url="https://example.com/y", snippet="on")
+
+        self.assertGreater(
+            source_quality_score(query, real_token),
+            source_quality_score(query, substring_only),
         )
 
 

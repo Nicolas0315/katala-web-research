@@ -34,6 +34,19 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(parser.results[0].url, "https://example.com/one")
         self.assertEqual(parser.results[0].title, "One")
 
+    def test_snippet_with_nested_link_is_not_truncated(self):
+        # A snippet div containing an inner <a> must not close on the inner </a>.
+        html = (
+            '<a class="result__a" href="https://example.com/one">One</a>'
+            '<div class="result__snippet">before <a href="https://x">middle</a> after</div>'
+        )
+        parser = _DuckDuckGoHTMLParser()
+        parser.feed(html)
+        parser.close()
+        self.assertEqual(len(parser.results), 1)
+        self.assertIn("before", parser.results[0].snippet)
+        self.assertIn("after", parser.results[0].snippet)
+
     def test_parses_duckduckgo_html_fixture(self):
         # Fixture-based regression: if DDG changes its CSS class names, the
         # parser returns 0 results instead of silently swallowing the change.

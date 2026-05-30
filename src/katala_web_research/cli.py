@@ -16,7 +16,7 @@ from .evaluation import build_eval_report, run_eval
 from .feeds import fetch_and_parse_feed
 from .investigation import build_investigation_report, sort_web_candidates
 from .models import FeedSource, PageSnapshot, SearchResult, utc_now_iso
-from .planner import build_search_plan
+from .planner import SearchPlanStep, build_search_plan
 from .providers import provider_status, search
 from .reader import read_url
 from .report import build_report
@@ -472,8 +472,8 @@ def cmd_sources_match(args: argparse.Namespace) -> int:
 
 
 def cmd_brief(args: argparse.Namespace) -> int:
-    search_plan = []
-    web_results = []
+    search_plan: list[SearchPlanStep] = []
+    web_results: list[SearchResult] = []
     if not args.no_web:
         with archive_env(args.archive):
             web_results, search_plan = search_with_plan(
@@ -522,8 +522,8 @@ def cmd_brief(args: argparse.Namespace) -> int:
 
 
 def cmd_investigate(args: argparse.Namespace) -> int:
-    search_plan = []
-    web_results = []
+    search_plan: list[SearchPlanStep] = []
+    web_results: list[SearchResult] = []
     if not args.no_web:
         with archive_env(args.archive):
             web_results, search_plan = search_with_plan(

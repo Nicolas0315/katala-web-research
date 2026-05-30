@@ -54,10 +54,10 @@ def source_quality_score(query: str, result: SearchResult) -> float:
 
     _label, base_quality = classify_url(result.url)
     tokens = query_tokens(query)
-    haystack = f"{result.title} {result.snippet}".lower()
-    overlap = sum(1 for token in tokens if token in haystack) / max(len(tokens), 1)
+    haystack_tokens = query_tokens(f"{result.title} {result.snippet}")
+    overlap = len(tokens & haystack_tokens) / max(len(tokens), 1)
     primary_bonus = 0.4 if base_quality >= 85 else 0.0
-    title_bonus = 0.2 if any(token in result.title.lower() for token in tokens) else 0.0
+    title_bonus = 0.2 if tokens & query_tokens(result.title) else 0.0
     freshness_bonus = _freshness_bonus(result.published_at)
     return round(base_quality / 100 + overlap + primary_bonus + title_bonus + freshness_bonus, 3)
 
@@ -66,7 +66,7 @@ def _freshness_bonus(published_at: str | None) -> float:
     if not published_at or len(published_at) < 4 or not published_at[:4].isdigit():
         return 0.0
     age = date.today().year - int(published_at[:4])
-    if age <= 0:
+    if age == 0:
         return 0.3
     if age == 1:
         return 0.15

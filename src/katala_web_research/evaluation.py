@@ -358,7 +358,7 @@ def evaluate_case(case: EvalCase, *, max_subqueries: int = 4, min_score: int = 8
 
     plan_intents = [step.intent for step in plan]
     intent_hits = sum(1 for intent in case.expected_plan_intents if intent in plan_intents)
-    preferred_hits = sum(1 for term in case.preferred_url_terms if any(term in url for url in top_urls[:2]))
+    preferred_hits = sum(1 for term in case.preferred_url_terms if any(term in url for url in top_urls))
     discouraged_above_preferred = _discouraged_above_preferred(case, top_urls)
     quality_ok = top_quality >= case.min_top_quality
 

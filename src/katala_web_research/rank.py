@@ -7,7 +7,7 @@ from urllib.parse import urlparse
 
 from .models import SearchResult
 
-TOKEN_RE = re.compile(r"[A-Za-z0-9_+-]{2,}|[\u3040-\u30ff\u3400-\u9fff]{1,}")
+TOKEN_RE = re.compile(r"[A-Za-z0-9_+-]{2,}|[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7a3]{1,}")
 
 
 def query_tokens(query: str) -> set[str]:

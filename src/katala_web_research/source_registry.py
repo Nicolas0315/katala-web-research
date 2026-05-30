@@ -135,6 +135,20 @@ def source_registry_metadata(url: str) -> dict[str, str | int] | None:
     }
 
 
+def registry_lines(url: str) -> list[str]:
+    metadata = source_registry_metadata(url)
+    if metadata is None:
+        return []
+    return [
+        f"- registry_source: {metadata['registry_source']}",
+        f"- registry_domain: {metadata['registry_domain']}",
+        f"- registry_freshness: {metadata['registry_freshness']}",
+        f"- registry_update_cadence: {metadata['registry_update_cadence']}",
+        f"- registry_trust_score: {metadata['registry_trust_score']}",
+        f"- bias_caveat: {metadata['bias_caveat']}",
+    ]
+
+
 def _highest_trust(sources: list[SourceRegistryEntry]) -> SourceRegistryEntry:
     return sorted(sources, key=lambda source: (-source.trust_score, source.name))[0]
 

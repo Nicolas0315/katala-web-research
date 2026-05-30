@@ -8,8 +8,8 @@ from .archive import DEFAULT_ARCHIVE, Archive
 from .brief import build_brief
 from .evaluation import build_eval_report, run_eval
 from .investigation import build_investigation_report, sort_web_candidates
-from .models import PageSnapshot
-from .planner import build_search_plan
+from .models import PageSnapshot, SearchResult
+from .planner import SearchPlanStep, build_search_plan
 from .providers import search
 from .reader import read_url
 from .workflow import search_with_plan
@@ -168,7 +168,7 @@ def handle_request(request: dict[str, Any]) -> dict[str, Any] | None:
             return result_response(request_id, {"tools": TOOLS})
         if method == "tools/call":
             params = request.get("params") or {}
-            return result_response(request_id, call_tool(params.get("name"), params.get("arguments") or {}))
+            return result_response(request_id, call_tool(str(params.get("name") or ""), params.get("arguments") or {}))
         return error_response(request_id, -32601, f"method not found: {method}")
     except Exception as exc:
         return error_response(request_id, -32000, str(exc))
@@ -208,22 +208,22 @@ def call_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
     if name == "kwr.repos_query":
         archive = Archive(str(arguments.get("archive", DEFAULT_ARCHIVE)))
         try:
-            hits = archive.query_repos(str(arguments["terms"]), limit=int(arguments.get("limit", 5)))
+            repo_hits = archive.query_repos(str(arguments["terms"]), limit=int(arguments.get("limit", 5)))
         finally:
             archive.close()
-        return text_result(json.dumps([hit.to_dict() for hit in hits], ensure_ascii=False, indent=2))
+        return text_result(json.dumps([hit.to_dict() for hit in repo_hits], ensure_ascii=False, indent=2))
     if name == "kwr.feeds_query":
         archive = Archive(str(arguments.get("archive", DEFAULT_ARCHIVE)))
         try:
-            hits = archive.query_feeds(str(arguments["terms"]), limit=int(arguments.get("limit", 5)))
+            feed_hits = archive.query_feeds(str(arguments["terms"]), limit=int(arguments.get("limit", 5)))
         finally:
             archive.close()
-        return text_result(json.dumps([hit.to_dict() for hit in hits], ensure_ascii=False, indent=2))
+        return text_result(json.dumps([hit.to_dict() for hit in feed_hits], ensure_ascii=False, indent=2))
     if name == "kwr.brief":
         query = str(arguments["query"])
         archive_path = str(arguments.get("archive", DEFAULT_ARCHIVE))
-        web_results = []
-        search_plan = []
+        web_results: list[SearchResult] = []
+        search_plan: list[SearchPlanStep] = []
         if not bool(arguments.get("no_web", False)):
             web_results, search_plan = search_with_plan(
                 query,
@@ -317,7 +317,11 @@ def text_result(text: str) -> dict[str, Any]:
 
 def main() -> int:
     while True:
-        message = read_framed_message(sys.stdin.buffer)
+        try:
+            message = read_framed_message(sys.stdin.buffer)
+        except (ValueError, UnicodeDecodeError):
+            # A single malformed frame must not kill the long-lived server.
+            continue
         if message is None:
             return 0
         response = handle_request(message)

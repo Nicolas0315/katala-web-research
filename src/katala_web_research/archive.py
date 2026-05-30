@@ -206,7 +206,7 @@ class Archive:
             "INSERT INTO runs(query, provider, created_at) VALUES (?, ?, ?)",
             (query, provider, utc_now_iso()),
         )
-        run_id = int(cur.lastrowid)
+        run_id: int = cur.lastrowid or 0
         self.conn.executemany(
             """
             INSERT INTO search_results(
@@ -508,4 +508,4 @@ def _fts_query(terms: str) -> str:
     tokens = [token.replace('"', "") for token in terms.split() if token.strip()]
     if not tokens:
         return '""'
-    return " OR ".join(f'"{token}"' for token in tokens)
+    return " ".join(f'"{token}"' for token in tokens)
