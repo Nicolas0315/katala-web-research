@@ -15,6 +15,7 @@ from .corpus import scan_repos
 from .evaluation import build_eval_report, run_eval
 from .feeds import fetch_and_parse_feed
 from .investigation import build_investigation_report, sort_web_candidates
+from .issues import build_project_radar, fetch_github_project_items, load_project_items_json
 from .models import FeedSource, PageSnapshot, SearchResult, utc_now_iso
 from .planner import SearchPlanStep, build_search_plan
 from .providers import provider_status, search
@@ -133,6 +134,34 @@ def build_parser() -> argparse.ArgumentParser:
     p_sources_match.add_argument("url")
     p_sources_match.add_argument("--json", action="store_true")
     p_sources_match.set_defaults(func=cmd_sources_match)
+
+    p_issues = sub.add_parser("issues", help="ingest, query, and report GitHub Issues and PRs")
+    issues_sub = p_issues.add_subparsers(required=True)
+    p_issues_ingest = issues_sub.add_parser("ingest", help="ingest GitHub Issues and PRs into the archive")
+    p_issues_ingest.add_argument("--owner", default="Nicolas0315")
+    p_issues_ingest.add_argument("--state", default="open", choices=["open", "closed"])
+    p_issues_ingest.add_argument("--include", default="both", choices=["issues", "prs", "both"])
+    p_issues_ingest.add_argument("--limit", "-n", type=int, default=50)
+    p_issues_ingest.add_argument("--from-json")
+    p_issues_ingest.add_argument("--kind", default="issue", choices=["issue", "pr"])
+    p_issues_ingest.add_argument("--archive", default=str(DEFAULT_ARCHIVE))
+    p_issues_ingest.add_argument("--json", action="store_true")
+    p_issues_ingest.set_defaults(func=cmd_issues_ingest)
+
+    p_issues_query = issues_sub.add_parser("query", help="search archived GitHub Issues and PRs")
+    p_issues_query.add_argument("terms")
+    p_issues_query.add_argument("--archive", default=str(DEFAULT_ARCHIVE))
+    p_issues_query.add_argument("--limit", "-n", type=int, default=10)
+    p_issues_query.add_argument("--json", action="store_true")
+    p_issues_query.set_defaults(func=cmd_issues_query)
+
+    p_issues_report = issues_sub.add_parser("report", help="write a Markdown project radar report")
+    p_issues_report.add_argument("--archive", default=str(DEFAULT_ARCHIVE))
+    p_issues_report.add_argument("--owner", default="")
+    p_issues_report.add_argument("--limit", "-n", type=int, default=100)
+    p_issues_report.add_argument("--out")
+    p_issues_report.add_argument("--json", action="store_true")
+    p_issues_report.set_defaults(func=cmd_issues_report)
 
     p_brief = sub.add_parser("brief", help="combine web search and local repo hits into a research brief")
     p_brief.add_argument("query")
@@ -468,6 +497,81 @@ def cmd_sources_match(args: argparse.Namespace) -> int:
             print(f"trust_score: {source.trust_score}")
             if source.bias_caveat:
                 print(f"bias_caveat: {source.bias_caveat}")
+    return 0
+
+
+def cmd_issues_ingest(args: argparse.Namespace) -> int:
+    if args.from_json:
+        items = load_project_items_json(args.from_json, kind=args.kind)
+    else:
+        items = fetch_github_project_items(
+            owner=args.owner,
+            state=args.state,
+            limit=args.limit,
+            include=args.include,
+        )
+    archive = Archive(args.archive)
+    try:
+        indexed = archive.upsert_project_items(items)
+    finally:
+        archive.close()
+    payload = {
+        "archive": args.archive,
+        "indexed_items": indexed,
+        "owner": args.owner,
+        "state": args.state,
+        "include": args.include,
+    }
+    if args.json:
+        print_json(payload)
+    else:
+        print(f"archive: {args.archive}")
+        print(f"indexed_items: {indexed}")
+    return 0
+
+
+def cmd_issues_query(args: argparse.Namespace) -> int:
+    archive = Archive(args.archive)
+    try:
+        hits = archive.query_project_items(args.terms, limit=args.limit)
+    finally:
+        archive.close()
+    if args.json:
+        print_json([hit.to_dict() for hit in hits])
+    else:
+        for idx, hit in enumerate(hits, start=1):
+            print(f"{idx}. {hit.repository}#{hit.number} {hit.title}")
+            print(f"   {hit.url}")
+            print(f"   kind={hit.kind} priority={hit.priority} updated_at={hit.updated_at}")
+            if hit.labels:
+                print(f"   labels={', '.join(hit.labels)}")
+    return 0
+
+
+def cmd_issues_report(args: argparse.Namespace) -> int:
+    archive = Archive(args.archive)
+    try:
+        items = archive.project_items(limit=args.limit)
+    finally:
+        archive.close()
+    report = build_project_radar(items, archive_path=args.archive, owner=args.owner)
+    out_path = None
+    if args.out:
+        out_path = Path(args.out)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(report, encoding="utf-8")
+    payload = {
+        "archive": args.archive,
+        "out": str(out_path) if out_path else None,
+        "item_count": len(items),
+    }
+    if args.json:
+        print_json(payload)
+    else:
+        if out_path:
+            print(f"project_radar: {out_path}")
+        else:
+            print(report)
     return 0
 
 
