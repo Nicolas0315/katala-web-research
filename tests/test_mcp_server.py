@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 from katala_web_research.archive import Archive
 from katala_web_research.feeds import parse_feed_text
-from katala_web_research.mcp_server import handle_request
+from katala_web_research.mcp_server import handle_request, main
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -25,6 +25,19 @@ class McpServerTests(unittest.TestCase):
         self.assertIn("kwr.repos_query", names)
         self.assertIn("kwr.feeds_query", names)
         self.assertIn("kwr.investigate", names)
+
+    def test_main_skips_malformed_frame_and_continues(self):
+        frames = [ValueError("bad json body"), None]
+
+        def fake_read(_stream):
+            item = frames.pop(0)
+            if isinstance(item, Exception):
+                raise item
+            return item
+
+        with patch("katala_web_research.mcp_server.read_framed_message", side_effect=fake_read):
+            self.assertEqual(main(), 0)
+        self.assertEqual(frames, [])
 
     def test_feeds_query_returns_archived_feed_items(self):
         with tempfile.TemporaryDirectory() as tmp:
