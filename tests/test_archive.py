@@ -90,6 +90,39 @@ class ArchiveTests(unittest.TestCase):
             self.assertEqual(written, 5)
             self.assertEqual(len(hits), 5)
 
+    def test_multi_term_query_requires_all_terms(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive_path = Path(tmp) / "archive.sqlite"
+            archive = Archive(archive_path)
+            try:
+                archive.upsert_repo_documents(
+                    [
+                        RepoDocument(
+                            repo_path="/repos/sample",
+                            repo_name="sample",
+                            rel_path="both.md",
+                            title="Both",
+                            content="kubernetes scheduling internals",
+                            kind="doc",
+                            indexed_at="2026-05-27T00:00:00+00:00",
+                        ),
+                        RepoDocument(
+                            repo_path="/repos/sample",
+                            repo_name="sample",
+                            rel_path="one.md",
+                            title="One",
+                            content="kubernetes overview only",
+                            kind="doc",
+                            indexed_at="2026-05-27T00:00:00+00:00",
+                        ),
+                    ]
+                )
+                hits = archive.query_repos("kubernetes scheduling", limit=10)
+            finally:
+                archive.close()
+
+            self.assertEqual({hit.rel_path for hit in hits}, {"both.md"})
+
 
 if __name__ == "__main__":
     unittest.main()

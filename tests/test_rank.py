@@ -1,7 +1,7 @@
 import unittest
 
 from katala_web_research.models import SearchResult
-from katala_web_research.rank import rank_results
+from katala_web_research.rank import query_tokens, rank_results
 
 
 class RankTests(unittest.TestCase):
@@ -49,6 +49,11 @@ class RankTests(unittest.TestCase):
         self.assertLess(len(ranked), 7)
         self.assertLessEqual(len(example_hosts), 3)
         self.assertIn("https://docs.github.com/agent", {r.url for r in ranked})
+
+    def test_korean_hangul_produces_tokens(self):
+        tokens = query_tokens("크리에이터 분석")
+        self.assertIn("크리에이터", tokens)
+        self.assertIn("분석", tokens)
 
 
 if __name__ == "__main__":

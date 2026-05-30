@@ -3,7 +3,7 @@ import os
 import unittest
 from unittest.mock import patch
 
-from katala_web_research.http import HttpResponse
+from katala_web_research.http import FetchError, HttpResponse
 from katala_web_research.models import SearchResult
 from katala_web_research.providers import BraveSearch, MetaSearch, OpenAlexSearch, SearxngSearch
 
@@ -22,6 +22,20 @@ class ProviderTests(unittest.TestCase):
 
         self.assertEqual(results[0].url, "https://example.com/a")
         self.assertEqual(results[0].source, "searxng")
+
+    def test_non_json_response_raises_fetch_error(self):
+        # A WAF / rate-limit page returns HTML; the provider must surface it as
+        # a FetchError naming the URL, not a bare JSONDecodeError.
+        response = HttpResponse(
+            url="http://localhost/search",
+            status=200,
+            headers={"content-type": "text/html"},
+            body=b"<html><body>rate limited</body></html>",
+        )
+        with patch.dict(os.environ, {"KWR_SEARXNG_URL": "http://localhost:8080"}):
+            with patch("katala_web_research.providers.fetch_url", return_value=response):
+                with self.assertRaises(FetchError):
+                    SearxngSearch().search("alpha")
 
     def test_searxng_provider_passes_optional_parameters(self):
         response = HttpResponse(

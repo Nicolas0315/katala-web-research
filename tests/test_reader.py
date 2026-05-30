@@ -4,7 +4,7 @@ from unittest.mock import patch
 from urllib.parse import urlparse
 
 from katala_web_research.http import FetchError, HttpResponse
-from katala_web_research.reader import read_with_jina
+from katala_web_research.reader import read_direct, read_with_jina
 
 
 def _response(body: str) -> HttpResponse:
@@ -48,6 +48,23 @@ class ReaderTests(unittest.TestCase):
         with patch("katala_web_research.reader.fetch_url", return_value=_response(content)):
             with self.assertRaises(FetchError):
                 read_with_jina("https://example.com/bad")
+
+    def test_read_direct_sniffs_meta_charset_when_header_lacks_it(self):
+        body = (
+            "<html><head><meta charset=\"shift_jis\">"
+            "<title>テスト</title></head><body>本文</body></html>"
+        ).encode("shift_jis")
+        response = HttpResponse(
+            url="https://example.jp/",
+            status=200,
+            headers={"content-type": "text/html"},
+            body=body,
+        )
+        with patch("katala_web_research.reader.fetch_url", return_value=response):
+            snapshot = read_direct("https://example.jp/")
+
+        self.assertIn("本文", snapshot.content)
+        self.assertEqual(snapshot.title, "テスト")
 
 
 if __name__ == "__main__":
