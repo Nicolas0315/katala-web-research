@@ -22,8 +22,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `brief.py` and `investigation.py`).
 
 ### Changed
-- Repo-archive multi-term queries now require **all** terms (FTS5 implicit AND) instead of any term
-  (OR), trading recall for precision.
 - `source_quality` overlap and title bonus use token-set intersection instead of substring matching,
   fixing false positives such as "on" matching "optimization".
 - `_freshness_bonus` no longer rewards future-dated results; only the current year earns the full bonus.
@@ -40,7 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `classify_file` tags `CLAUDE.md`/`GEMINI.md` as `agent-context` (previously `docs`).
 - DuckDuckGo snippet parser no longer truncates snippets that contain nested links.
 - Provider JSON parsing wraps non-JSON responses (e.g. WAF/error HTML) as `FetchError` naming the URL.
-- MCP server skips malformed stdin frames instead of crashing the long-lived process.
+- MCP server consumes a frame's body before parsing and skips only malformed-body frames, so a bad
+  message no longer crashes the long-lived process or desyncs the stream.
+- Reader meta-charset sniffing accepts only real web text encodings, so a hostile page cannot point
+  decoding at a transform codec.
 
 ## [0.1.0] - 2026-05-27
 

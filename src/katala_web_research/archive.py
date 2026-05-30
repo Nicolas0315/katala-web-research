@@ -508,4 +508,6 @@ def _fts_query(terms: str) -> str:
     tokens = [token.replace('"', "") for token in terms.split() if token.strip()]
     if not tokens:
         return '""'
-    return " ".join(f'"{token}"' for token in tokens)
+    # Callers pass natural-language queries (incl. stopwords), so OR keeps recall;
+    # FTS5 bm25 ranking already floats multi-term matches to the top.
+    return " OR ".join(f'"{token}"' for token in tokens)

@@ -66,6 +66,19 @@ class ReaderTests(unittest.TestCase):
         self.assertIn("本文", snapshot.content)
         self.assertEqual(snapshot.title, "テスト")
 
+    def test_read_direct_ignores_unsafe_sniffed_charset(self):
+        body = b'<html><head><meta charset="unicode_escape"></head><body>plain</body></html>'
+        response = HttpResponse(
+            url="https://example.com/",
+            status=200,
+            headers={"content-type": "text/html"},
+            body=body,
+        )
+        with patch("katala_web_research.reader.fetch_url", return_value=response):
+            snapshot = read_direct("https://example.com/")
+
+        self.assertIn("plain", snapshot.content)
+
 
 if __name__ == "__main__":
     unittest.main()

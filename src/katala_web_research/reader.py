@@ -12,6 +12,19 @@ from .text import SimpleHTMLTextExtractor
 
 _META_CHARSET_RE = re.compile(rb"""<meta[^>]+charset=["']?\s*([a-zA-Z0-9_-]+)""", re.IGNORECASE)
 
+# Only honor a sniffed charset that resolves to a real web text encoding, so a
+# hostile page cannot point us at a transform codec (e.g. unicode_escape, hex).
+_SAFE_CODEC_NAMES = {
+    codecs.lookup(label).name
+    for label in (
+        "utf-8", "utf-16", "utf-16le", "utf-16be", "utf-32", "ascii",
+        "iso-8859-1", "iso-8859-2", "iso-8859-5", "iso-8859-15",
+        "windows-1250", "windows-1251", "windows-1252", "windows-1254",
+        "shift_jis", "euc-jp", "iso-2022-jp", "euc-kr", "big5",
+        "gbk", "gb2312", "gb18030",
+    )
+}
+
 
 def read_url(url: str, *, reader: str = "auto") -> PageSnapshot:
     _require_http_url(url)
@@ -76,8 +89,10 @@ def _sniff_meta_charset(body: bytes) -> str | None:
         return None
     charset = match.group(1).decode("ascii", errors="ignore")
     try:
-        codecs.lookup(charset)
+        normalized = codecs.lookup(charset).name
     except LookupError:
+        return None
+    if normalized not in _SAFE_CODEC_NAMES:
         return None
     return charset
 

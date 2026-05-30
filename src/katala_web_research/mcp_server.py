@@ -319,8 +319,9 @@ def main() -> int:
     while True:
         try:
             message = read_framed_message(sys.stdin.buffer)
-        except (ValueError, UnicodeDecodeError):
-            # A single malformed frame must not kill the long-lived server.
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            # The frame body was fully consumed before parsing, so the stream is
+            # positioned at the next frame; skip this one without desyncing.
             continue
         if message is None:
             return 0
@@ -341,10 +342,16 @@ def read_framed_message(stream) -> dict[str, Any] | None:
         if ":" in line:
             key, value = line.split(":", 1)
             headers[key.lower()] = value.strip()
-    length = int(headers.get("content-length", "0"))
+    raw_length = headers.get("content-length", "0")
+    if not raw_length.isdigit():
+        # Without a valid length the next frame boundary is unknown; stop cleanly
+        # rather than guess and desync the stream.
+        return None
+    length = int(raw_length)
     if length <= 0:
         return None
-    return json.loads(stream.read(length).decode("utf-8"))
+    raw = stream.read(length)  # consume the framed body before parsing
+    return json.loads(raw.decode("utf-8"))
 
 
 def write_framed_message(stream, message: dict[str, Any]) -> None:

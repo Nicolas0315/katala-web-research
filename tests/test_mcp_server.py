@@ -1,4 +1,7 @@
+import io
+import json
 import tempfile
+import types
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -26,18 +29,25 @@ class McpServerTests(unittest.TestCase):
         self.assertIn("kwr.feeds_query", names)
         self.assertIn("kwr.investigate", names)
 
-    def test_main_skips_malformed_frame_and_continues(self):
-        frames = [ValueError("bad json body"), None]
+    def test_main_skips_malformed_body_then_processes_next_frame(self):
+        # A malformed body must be skipped without desyncing the stream: the
+        # well-formed frame that follows it still has to be processed.
+        def frame(payload: bytes) -> bytes:
+            return b"Content-Length: %d\r\n\r\n%s" % (len(payload), payload)
 
-        def fake_read(_stream):
-            item = frames.pop(0)
-            if isinstance(item, Exception):
-                raise item
-            return item
+        good = json.dumps(
+            {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}
+        ).encode("utf-8")
+        stream_in = io.BytesIO(frame(b"{not valid json") + frame(good))
+        stream_out = io.BytesIO()
+        fake_stdin = types.SimpleNamespace(buffer=stream_in)
+        fake_stdout = types.SimpleNamespace(buffer=stream_out)
 
-        with patch("katala_web_research.mcp_server.read_framed_message", side_effect=fake_read):
-            self.assertEqual(main(), 0)
-        self.assertEqual(frames, [])
+        with patch("katala_web_research.mcp_server.sys.stdin", fake_stdin):
+            with patch("katala_web_research.mcp_server.sys.stdout", fake_stdout):
+                self.assertEqual(main(), 0)
+
+        self.assertIn(b"serverInfo", stream_out.getvalue())
 
     def test_feeds_query_returns_archived_feed_items(self):
         with tempfile.TemporaryDirectory() as tmp:
