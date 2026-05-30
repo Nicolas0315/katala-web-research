@@ -14,9 +14,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `.env` secret-pattern guard in `scripts/verify.sh` (rejects `sk-`, `ghp_`, `AKIA`, private key headers).
 - PyPI classifiers and `[project.optional-dependencies]` groups in `pyproject.toml`.
 - `CHANGELOG.md` (this file).
+- HTML `<meta charset>` sniffing in the direct reader so CJK pages decode correctly when the
+  `Content-Type` header omits a charset.
+- Korean Hangul range in query tokenization (`TOKEN_RE`) so Korean queries produce tokens.
+- `year` parameter threaded through `search_with_plan` to reach the freshness sub-query.
+- Shared `registry_lines()` in `source_registry` (de-duplicates the helper previously copied into
+  `brief.py` and `investigation.py`).
+
+### Changed
+- Repo-archive multi-term queries now require **all** terms (FTS5 implicit AND) instead of any term
+  (OR), trading recall for precision.
+- `source_quality` overlap and title bonus use token-set intersection instead of substring matching,
+  fixing false positives such as "on" matching "optimization".
+- `_freshness_bonus` no longer rewards future-dated results; only the current year earns the full bonus.
+- Eval `preferred_hits` scans the same top-3 window as the discouraged-source check, removing a
+  scoring asymmetry.
+- RRF engine-health bookkeeping keeps the maximum observed health per source.
+- `search_with_plan` with an empty expansion plan falls back to a direct search instead of returning
+  no results.
 
 ### Fixed
 - Removed unused `quote_plus` import from `providers.py` (ruff F401).
+- Corpus re-indexing no longer lets unchanged files consume the `max_files` budget, so newly added
+  files are not silently skipped.
+- `classify_file` tags `CLAUDE.md`/`GEMINI.md` as `agent-context` (previously `docs`).
+- DuckDuckGo snippet parser no longer truncates snippets that contain nested links.
+- Provider JSON parsing wraps non-JSON responses (e.g. WAF/error HTML) as `FetchError` naming the URL.
+- MCP server skips malformed stdin frames instead of crashing the long-lived process.
 
 ## [0.1.0] - 2026-05-27
 
@@ -40,5 +64,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GitHub Actions CI workflow.
 - Contribution guide, PR template, and issue templates.
 
-[Unreleased]: https://github.com/katala-os/katala-web-research/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/katala-os/katala-web-research/releases/tag/v0.1.0
+[Unreleased]: https://github.com/Nicolas0315/katala-web-research/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/Nicolas0315/katala-web-research/releases/tag/v0.1.0
