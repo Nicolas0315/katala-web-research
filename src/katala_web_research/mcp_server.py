@@ -95,6 +95,19 @@ TOOLS = [
         },
     },
     {
+        "name": "kwr.feeds_query",
+        "description": "Search archived RSS/Atom/JSON feed items in the local SQLite archive.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "terms": {"type": "string"},
+                "archive": {"type": "string", "default": str(DEFAULT_ARCHIVE)},
+                "limit": {"type": "integer", "default": 5},
+            },
+            "required": ["terms"],
+        },
+    },
+    {
         "name": "kwr.brief",
         "description": "Build a combined research brief from web candidates and local repository evidence.",
         "inputSchema": {
@@ -105,6 +118,7 @@ TOOLS = [
                 "provider": {"type": "string", "default": "ddg"},
                 "web_limit": {"type": "integer", "default": 5},
                 "repo_limit": {"type": "integer", "default": 5},
+                "feed_limit": {"type": "integer", "default": 0},
                 "expand_queries": {"type": "boolean", "default": False},
                 "max_subqueries": {"type": "integer", "default": 4},
                 "no_web": {"type": "boolean", "default": False},
@@ -124,6 +138,7 @@ TOOLS = [
                 "reader": {"type": "string", "default": "auto"},
                 "web_limit": {"type": "integer", "default": 8},
                 "repo_limit": {"type": "integer", "default": 6},
+                "feed_limit": {"type": "integer", "default": 0},
                 "read_top": {"type": "integer", "default": 3},
                 "expand_queries": {"type": "boolean", "default": False},
                 "max_subqueries": {"type": "integer", "default": 4},
@@ -198,6 +213,13 @@ def call_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         finally:
             archive.close()
         return text_result(json.dumps([hit.to_dict() for hit in hits], ensure_ascii=False, indent=2))
+    if name == "kwr.feeds_query":
+        archive = Archive(str(arguments.get("archive", DEFAULT_ARCHIVE)))
+        try:
+            hits = archive.query_feeds(str(arguments["terms"]), limit=int(arguments.get("limit", 5)))
+        finally:
+            archive.close()
+        return text_result(json.dumps([hit.to_dict() for hit in hits], ensure_ascii=False, indent=2))
     if name == "kwr.brief":
         query = str(arguments["query"])
         archive_path = str(arguments.get("archive", DEFAULT_ARCHIVE))
@@ -212,9 +234,11 @@ def call_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 max_subqueries=int(arguments.get("max_subqueries", 4)),
                 archive_path=archive_path,
             )
+        feed_limit = int(arguments.get("feed_limit", 0))
         archive = Archive(archive_path)
         try:
             repo_hits = archive.query_repos(query, limit=int(arguments.get("repo_limit", 5)))
+            feed_hits = archive.query_feeds(query, limit=feed_limit) if feed_limit > 0 else []
         finally:
             archive.close()
         return text_result(
@@ -224,6 +248,7 @@ def call_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 repo_hits=repo_hits,
                 archive_path=archive_path,
                 search_plan=search_plan,
+                feed_hits=feed_hits,
             )
         )
     if name == "kwr.investigate":
@@ -241,10 +266,12 @@ def call_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 max_subqueries=int(arguments.get("max_subqueries", 4)),
                 archive_path=archive_path,
             )
+        feed_limit = int(arguments.get("feed_limit", 0))
         archive = Archive(archive_path)
         pages: list[PageSnapshot] = []
         try:
             repo_hits = archive.query_repos(query, limit=int(arguments.get("repo_limit", 6)))
+            feed_hits = archive.query_feeds(query, limit=feed_limit) if feed_limit > 0 else []
             if web_results:
                 archive.store_run(query, provider, web_results)
             for result in sort_web_candidates(web_results)[: max(int(arguments.get("read_top", 3)), 0)]:
@@ -271,6 +298,7 @@ def call_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 repo_hits=repo_hits,
                 pages=pages,
                 search_plan=search_plan,
+                feed_hits=feed_hits,
             )
         )
     raise ValueError(f"unknown tool: {name}")

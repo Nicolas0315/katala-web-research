@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .models import RepoHit, SearchResult, utc_now_iso
+from .models import FeedHit, RepoHit, SearchResult, utc_now_iso
 from .planner import SearchPlanStep, format_search_plan
 from .source_quality import classify_url
 from .source_registry import source_registry_metadata
@@ -13,7 +13,9 @@ def build_brief(
     repo_hits: list[RepoHit],
     archive_path: str,
     search_plan: list[SearchPlanStep] | None = None,
+    feed_hits: list[FeedHit] | None = None,
 ) -> str:
+    feed_hits = feed_hits or []
     lines = [
         f"# Research Brief: {query}",
         "",
@@ -21,6 +23,7 @@ def build_brief(
         f"- archive: `{archive_path}`",
         f"- web_results: {len(web_results)}",
         f"- repo_hits: {len(repo_hits)}",
+        f"- feed_hits: {len(feed_hits)}",
         "",
     ]
     if search_plan:
@@ -64,6 +67,23 @@ def build_brief(
             )
     else:
         lines.extend(["No local repository hits found in the selected archive.", ""])
+
+    lines.extend(["## Feed Evidence", ""])
+    if feed_hits:
+        for hit in feed_hits:
+            lines.extend(
+                [
+                    f"### {hit.title}",
+                    "",
+                    f"- url: {hit.url}",
+                    f"- feed: {hit.source_title or hit.source_url}",
+                    f"- published_at: {hit.published_at or 'unknown'}",
+                    f"- snippet: {hit.snippet or 'none'}",
+                    "",
+                ]
+            )
+    else:
+        lines.extend(["No archived feed items matched in the selected archive.", ""])
 
     lines.extend(
         [

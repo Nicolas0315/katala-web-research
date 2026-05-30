@@ -21,7 +21,10 @@ class HttpResponse:
         charset = "utf-8"
         if "charset=" in content_type:
             charset = content_type.split("charset=", 1)[1].split(";", 1)[0].strip()
-        return self.body.decode(charset or "utf-8", errors="replace")
+        try:
+            return self.body.decode(charset or "utf-8", errors="replace")
+        except LookupError:
+            return self.body.decode("utf-8", errors="replace")
 
 
 class FetchError(RuntimeError):

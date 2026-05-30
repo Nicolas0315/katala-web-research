@@ -16,11 +16,14 @@ class EvaluationTests(unittest.TestCase):
         self.assertTrue(all(score >= 80 for score in summary.category_scores.values()))
 
     def test_min_score_controls_case_pass_threshold(self):
-        summary = run_eval(min_score=50, max_subqueries=1)
+        lenient = run_eval(min_score=50, max_subqueries=1)
+        strict = run_eval(min_score=90, max_subqueries=1)
 
-        self.assertTrue(summary.passed)
-        self.assertGreaterEqual(summary.score, 50)
-        self.assertTrue(any(case.score < 80 and case.passed for case in summary.cases))
+        self.assertTrue(lenient.passed)
+        self.assertGreaterEqual(lenient.score, 50)
+        self.assertTrue(all(case.passed for case in lenient.cases))
+        self.assertFalse(strict.passed)
+        self.assertTrue(all(not case.passed for case in strict.cases))
 
     def test_eval_report_includes_case_scores(self):
         summary = run_eval(min_score=80)

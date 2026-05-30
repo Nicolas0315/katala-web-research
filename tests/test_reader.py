@@ -1,0 +1,54 @@
+import json
+import unittest
+from urllib.parse import urlparse
+from unittest.mock import patch
+
+from katala_web_research.http import FetchError, HttpResponse
+from katala_web_research.reader import read_with_jina
+
+
+def _response(body: str) -> HttpResponse:
+    return HttpResponse(
+        url="https://r.jina.ai/",
+        status=200,
+        headers={"content-type": "text/plain; charset=utf-8"},
+        body=body.encode("utf-8"),
+    )
+
+
+class ReaderTests(unittest.TestCase):
+    def test_jina_target_url_is_encoded_as_opaque_path(self):
+        target = "https://example.com/a b?q=x&z=1#frag"
+        with patch("katala_web_research.reader.fetch_url", return_value=_response("# Example")) as fetch:
+            read_with_jina(target)
+
+        jina_url = fetch.call_args.args[0]
+        parsed = urlparse(jina_url)
+        self.assertEqual(parsed.netloc, "r.jina.ai")
+        self.assertEqual(parsed.query, "")
+        self.assertEqual(parsed.fragment, "")
+        self.assertIn("https%3A%2F%2Fexample.com%2Fa%20b%3Fq%3Dx%26z%3D1%23frag", parsed.path)
+
+    def test_jina_reader_allows_json_documents_with_code_field(self):
+        content = json.dumps({"code": "sample", "message": "domain content", "data": [1, 2, 3]})
+        with patch("katala_web_research.reader.fetch_url", return_value=_response(content)):
+            snapshot = read_with_jina("https://example.com/api")
+
+        self.assertEqual(snapshot.content, content)
+
+    def test_jina_reader_rejects_known_error_payload(self):
+        content = json.dumps(
+            {
+                "code": 422,
+                "status": 42200,
+                "name": "AssertionFailureError",
+                "message": "invalid target",
+            }
+        )
+        with patch("katala_web_research.reader.fetch_url", return_value=_response(content)):
+            with self.assertRaises(FetchError):
+                read_with_jina("https://example.com/bad")
+
+
+if __name__ == "__main__":
+    unittest.main()
