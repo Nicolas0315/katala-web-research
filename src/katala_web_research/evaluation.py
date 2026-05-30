@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 
 from .models import SearchResult
 from .planner import build_search_plan
 from .rank import rank_results
 from .source_quality import classify_url
+
+# Fixtures anchor publish dates to the current year so freshness scoring stays
+# identical every year instead of decaying as hardcoded years age out.
+CURRENT_YEAR = datetime.now(timezone.utc).year
 
 
 @dataclass(slots=True, frozen=True)
@@ -115,7 +120,7 @@ def default_eval_cases() -> list[EvalCase]:
                     url="https://arxiv.org/abs/2510.18633",
                     snippet="Retrieval-augmented generation systems decompose requests into subqueries.",
                     rank=2,
-                    published_at="2025-10-22",
+                    published_at=f"{CURRENT_YEAR - 1}-10-22",
                 ),
                 SearchResult(
                     title="Advanced RAG production patterns",
@@ -128,7 +133,7 @@ def default_eval_cases() -> list[EvalCase]:
                     url="https://aclanthology.org/2025.acl-srw.32/",
                     snippet="A RAG pipeline that incorporates question decomposition and reranking.",
                     rank=3,
-                    published_at="2025-07-01",
+                    published_at=f"{CURRENT_YEAR - 1}-07-01",
                 ),
             ],
             expected_plan_intents=("baseline", "primary", "critique"),
@@ -174,7 +179,7 @@ def default_eval_cases() -> list[EvalCase]:
                     url="https://docs.python.org/3/whatsnew/3.14.html",
                     snippet="Official release notes and changed behavior for Python.",
                     rank=2,
-                    published_at="2026-05-01",
+                    published_at=f"{CURRENT_YEAR}-05-01",
                 ),
             ],
             expected_plan_intents=("baseline", "official", "primary"),
@@ -199,7 +204,7 @@ def default_eval_cases() -> list[EvalCase]:
                     snippet="Primary security advisory for Node.js and OpenSSL.",
                     source="github",
                     rank=2,
-                    published_at="2026-04-10",
+                    published_at=f"{CURRENT_YEAR}-04-10",
                 ),
                 SearchResult(
                     title="NVD CVE detail",
@@ -281,7 +286,7 @@ def default_eval_cases() -> list[EvalCase]:
                     url="https://developers.openai.com/tracks/building-agents",
                     snippet="Official OpenAI developer documentation for building agents.",
                     rank=2,
-                    published_at="2026-05-01",
+                    published_at=f"{CURRENT_YEAR}-05-01",
                 ),
                 SearchResult(
                     title="OpenAI Agents Python releases",
@@ -289,7 +294,7 @@ def default_eval_cases() -> list[EvalCase]:
                     snippet="Primary release history for the OpenAI Agents Python SDK.",
                     source="github",
                     rank=3,
-                    published_at="2026-05-20",
+                    published_at=f"{CURRENT_YEAR}-05-20",
                 ),
             ],
             expected_plan_intents=("baseline", "official", "primary"),
@@ -312,7 +317,7 @@ def default_eval_cases() -> list[EvalCase]:
                     url="https://ground.news/",
                     snippet="Compare news coverage by source mix and political bias.",
                     rank=2,
-                    published_at="2026-05-01",
+                    published_at=f"{CURRENT_YEAR}-05-01",
                 ),
                 SearchResult(
                     title="AllSides media bias ratings",

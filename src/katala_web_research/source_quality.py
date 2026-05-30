@@ -6,7 +6,6 @@ from urllib.parse import urlparse
 from .models import SearchResult
 from .source_registry import source_registry
 
-
 OFFICIAL_DOC_HOSTS = {
     "docs.github.com",
     "developers.openai.com",

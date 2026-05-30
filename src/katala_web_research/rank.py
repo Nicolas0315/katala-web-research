@@ -7,7 +7,6 @@ from urllib.parse import urlparse
 
 from .models import SearchResult
 
-
 TOKEN_RE = re.compile(r"[A-Za-z0-9_+-]{2,}|[\u3040-\u30ff\u3400-\u9fff]{1,}")
 
 
@@ -70,7 +69,6 @@ def _select_with_katala_diversity(results: list[SearchResult], classifier) -> li
     host_cap = max(1, ceil(k * 0.4))
     type_cap = max(1, ceil(k * 0.55))
     selected: list[SearchResult] = []
-    selected_keys: set[str] = set()
     host_count: Counter[str] = Counter()
     type_count: Counter[str] = Counter()
 
@@ -82,14 +80,7 @@ def _select_with_katala_diversity(results: list[SearchResult], classifier) -> li
         if type_count[source_type] >= type_cap:
             continue
         selected.append(result)
-        selected_keys.add(result.url)
         host_count[host] += 1
         type_count[source_type] += 1
 
-    for result in results:
-        if len(selected) >= k:
-            break
-        if result.url not in selected_keys:
-            selected.append(result)
-            selected_keys.add(result.url)
     return selected

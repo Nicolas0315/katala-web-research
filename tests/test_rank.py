@@ -34,6 +34,22 @@ class RankTests(unittest.TestCase):
 
         self.assertEqual(ranked[0].url, "https://arxiv.org/abs/2603.13853")
 
+    def test_diversity_drops_host_dominated_overflow(self):
+        results = [
+            SearchResult(title=f"Agent research {i}", url=f"https://example.com/p{i}", rank=i)
+            for i in range(1, 7)
+        ]
+        results.append(
+            SearchResult(title="Agent research docs", url="https://docs.github.com/agent", rank=7)
+        )
+
+        ranked = rank_results("agent research", results)
+        example_hosts = [r.url for r in ranked if "example.com" in r.url]
+
+        self.assertLess(len(ranked), 7)
+        self.assertLessEqual(len(example_hosts), 3)
+        self.assertIn("https://docs.github.com/agent", {r.url for r in ranked})
+
 
 if __name__ == "__main__":
     unittest.main()
