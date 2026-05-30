@@ -1,7 +1,7 @@
 import json
 import unittest
-from urllib.parse import urlparse
 from unittest.mock import patch
+from urllib.parse import urlparse
 
 from katala_web_research.http import FetchError, HttpResponse
 from katala_web_research.reader import read_with_jina

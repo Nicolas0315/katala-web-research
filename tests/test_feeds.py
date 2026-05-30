@@ -9,7 +9,6 @@ from katala_web_research.feeds import parse_feed_text
 from katala_web_research.models import FeedSource
 from katala_web_research.providers import FeedSearch
 
-
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
