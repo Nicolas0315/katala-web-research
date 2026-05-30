@@ -7,7 +7,6 @@ from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlparse
 
-
 REGISTRY_PATH = Path(__file__).with_name("data") / "source_registry.json"
 OVERLAY_ENV = "KWR_SOURCE_REGISTRY_OVERLAY"
 

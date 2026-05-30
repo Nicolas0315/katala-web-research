@@ -47,6 +47,18 @@ grep -q "all_passed: true" /tmp/katala-web-research-quality.txt
 grep -q "Deterministic Multi-Run Evaluation" /tmp/katala-web-research-quality.md
 rm -f /tmp/katala-web-research-quality.txt /tmp/katala-web-research-quality.md
 
+echo "== .env secret pattern guard =="
+# Allowed in .env: op:// references and plain public emails.
+# Reject any line that looks like a raw secret token or key.
+if [ -f "$ROOT/.env" ]; then
+  bad_lines="$(grep -nE '(sk-[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY)' "$ROOT/.env" || true)"
+  if [ -n "$bad_lines" ]; then
+    echo "Refusing: .env contains raw secret pattern (sk-, ghp_, AKIA, private key header)" >&2
+    echo "$bad_lines" >&2
+    exit 1
+  fi
+fi
+
 echo "== tracked artifact guard =="
 if git rev-parse --show-toplevel >/dev/null 2>&1; then
   tracked_sensitive="$(git ls-files -- . | grep -E '(^|/)(raw|downloads|sessions|logs?)/|\.env($|\.)|\.jsonl$|\.sqlite(-shm|-wal)?$|\.log$|__pycache__|\.pyc|\.DS_Store' | grep -vE '(^|/)\.env\.example$' || true)"

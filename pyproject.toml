@@ -11,7 +11,27 @@ requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "Katala OS" }]
 keywords = ["research", "web-search", "sqlite", "fts5", "cli"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
 dependencies = []
+
+# Optional provider integrations — all are pure-stdlib HTTP (urllib.request).
+# No extra packages are needed; configure providers via environment variables:
+#   KWR_SEARXNG_URL        — self-hosted SearXNG instance
+#   KWR_BRAVE_API_KEY      — Brave Search API key
+#   OPENALEX_API_KEY       — OpenAlex API key (op:// 1Password ref supported)
+#   KWR_JINA_API_KEY       — Jina AI reader API key
+[project.optional-dependencies]
+openalex = []
+brave = []
+jina = []
+searxng = []
 
 [project.scripts]
 kwr = "katala_web_research.cli:main"
@@ -22,3 +42,22 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 katala_web_research = ["data/*.json"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = [
+    "E501",  # line-length enforced by formatter, not linter
+]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+# Scoped to src/ — 21 pre-existing errors remain (attr-defined, var-annotated,
+# assignment) in brief.py, investigation.py, mcp_server.py, cli.py, corpus.py,
+# archive.py. Tracked for future cleanup; not blocking.
+files = ["src/katala_web_research"]
+warn_unused_ignores = false

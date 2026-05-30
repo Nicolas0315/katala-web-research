@@ -1,7 +1,10 @@
+import pathlib
 import unittest
 
 from katala_web_research.providers import _DuckDuckGoHTMLParser
 from katala_web_research.text import SimpleHTMLTextExtractor, normalize_url
+
+_FIXTURES = pathlib.Path(__file__).parent / "fixtures"
 
 
 class ParserTests(unittest.TestCase):
@@ -30,6 +33,35 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(len(parser.results), 2)
         self.assertEqual(parser.results[0].url, "https://example.com/one")
         self.assertEqual(parser.results[0].title, "One")
+
+    def test_parses_duckduckgo_html_fixture(self):
+        # Fixture-based regression: if DDG changes its CSS class names, the
+        # parser returns 0 results instead of silently swallowing the change.
+        html = (_FIXTURES / "sample.duckduckgo.html").read_text(encoding="utf-8")
+        parser = _DuckDuckGoHTMLParser()
+        parser.feed(html)
+        parser.close()
+
+        self.assertEqual(len(parser.results), 3)
+
+        # First result — URL rewritten from DDG redirect
+        self.assertEqual(parser.results[0].url, "https://docs.python.org/3/library/urllib.html")
+        self.assertEqual(parser.results[0].title, "urllib.request — Python 3 docs")
+        self.assertIn("Standard library HTTP client", parser.results[0].snippet)
+
+        # Second result — plain URL, has snippet
+        self.assertEqual(parser.results[1].url, "https://example.com/two")
+        self.assertEqual(parser.results[1].title, "Second Result Title")
+        self.assertIn("second search result", parser.results[1].snippet)
+
+        # Third result — plain URL, no snippet (empty string, not None)
+        self.assertEqual(parser.results[2].url, "https://example.com/three")
+        self.assertEqual(parser.results[2].title, "Third Result With No Snippet")
+        self.assertEqual(parser.results[2].snippet, "")
+
+        # Every result must carry "ddg" as the source tag
+        for r in parser.results:
+            self.assertEqual(r.source, "ddg")
 
 
 if __name__ == "__main__":

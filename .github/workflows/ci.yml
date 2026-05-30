@@ -8,10 +8,31 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: scripts/verify.sh
+
+  lint:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: scripts/verify.sh
-
+      - name: Install lint tools
+        run: pip install ruff mypy
+      - name: ruff check
+        run: ruff check src/
+      - name: mypy (advisory)
+        # 21 pre-existing type errors are tracked but not blocking.
+        # This step is continue-on-error so the CI stays green while the
+        # backlog is worked down incrementally.
+        run: mypy src/katala_web_research/
+        continue-on-error: true

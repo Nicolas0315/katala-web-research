@@ -8,7 +8,6 @@ from pathlib import Path
 from .models import RepoDocument, utc_now_iso
 from .text import collapse_space
 
-
 DEFAULT_INCLUDE_NAME_ORDER = (
     "AGENTS.md",
     "CLAUDE.md",
@@ -108,7 +107,7 @@ def find_git_repos(root: Path, *, max_repos: int = 200) -> tuple[list[Path], lis
         return found, warnings
 
     repos: list[Path] = []
-    warnings: list[str] = []
+    warnings = []
     seen: set[Path] = set()
     try:
         child_names = sorted(entry.name for entry in os.scandir(root) if entry.is_dir(follow_symlinks=False))

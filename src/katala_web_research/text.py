@@ -5,7 +5,6 @@ from html import unescape
 from html.parser import HTMLParser
 from urllib.parse import parse_qs, unquote, urlparse
 
-
 SPACE_RE = re.compile(r"\s+")
 
 
