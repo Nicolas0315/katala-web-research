@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-
 DEFAULT_USER_AGENT = "katala-web-research/0.1 (+local research tool)"
 
 

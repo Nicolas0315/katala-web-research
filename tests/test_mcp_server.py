@@ -1,12 +1,11 @@
-import unittest
 import tempfile
+import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 from katala_web_research.archive import Archive
 from katala_web_research.feeds import parse_feed_text
 from katala_web_research.mcp_server import handle_request
-
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -24,7 +23,38 @@ class McpServerTests(unittest.TestCase):
         self.assertIn("kwr.eval", names)
         self.assertIn("kwr.search", names)
         self.assertIn("kwr.repos_query", names)
+        self.assertIn("kwr.feeds_query", names)
         self.assertIn("kwr.investigate", names)
+
+    def test_feeds_query_returns_archived_feed_items(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            feed_archive_path = Path(tmp) / "feed.sqlite"
+            parsed = parse_feed_text(
+                (FIXTURES / "sample.rss.xml").read_text(encoding="utf-8"),
+                source_url="https://example.com/feed.xml",
+                fetched_at="2026-05-28T00:00:00+00:00",
+            )
+            feed_archive = Archive(feed_archive_path)
+            try:
+                feed_archive.upsert_feed_source(parsed.source)
+                feed_archive.upsert_feed_items(parsed.items)
+            finally:
+                feed_archive.close()
+
+            response = handle_request(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 9,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "kwr.feeds_query",
+                        "arguments": {"terms": "RSSHub", "archive": str(feed_archive_path), "limit": 5},
+                    },
+                }
+            )
+
+        text = response["result"]["content"][0]["text"]
+        self.assertIn("https://example.com/rsshub-adapter", text)
 
     def test_brief_feed_provider_uses_requested_archive(self):
         with tempfile.TemporaryDirectory() as tmp:

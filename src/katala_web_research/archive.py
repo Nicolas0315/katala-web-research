@@ -15,7 +15,6 @@ from .models import (
     utc_now_iso,
 )
 
-
 DEFAULT_ARCHIVE = Path(".katala-web-research/archive.sqlite")
 
 

@@ -65,6 +65,31 @@ class ArchiveTests(unittest.TestCase):
             self.assertEqual(hits[0].repo_name, "sample")
             self.assertEqual(metadata[("/repos/sample", "README.md")], (51, 123, "abc"))
 
+    def test_batch_upsert_repo_documents(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive_path = Path(tmp) / "archive.sqlite"
+            archive = Archive(archive_path)
+            documents = [
+                RepoDocument(
+                    repo_path="/repos/sample",
+                    repo_name="sample",
+                    rel_path=f"doc{i}.md",
+                    title=f"Doc {i}",
+                    content="Indexed content about web research pipelines.",
+                    kind="doc",
+                    indexed_at="2026-05-27T00:00:00+00:00",
+                )
+                for i in range(5)
+            ]
+            try:
+                written = archive.upsert_repo_documents(documents, batch_size=2)
+                hits = archive.query_repos("pipelines", limit=10)
+            finally:
+                archive.close()
+
+            self.assertEqual(written, 5)
+            self.assertEqual(len(hits), 5)
+
 
 if __name__ == "__main__":
     unittest.main()

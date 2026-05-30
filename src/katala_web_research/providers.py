@@ -9,15 +9,14 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass, replace
 from html.parser import HTMLParser
 from typing import Protocol
-from urllib.parse import quote_plus, urlencode
+from urllib.parse import urlencode
 
-from .archive import Archive, DEFAULT_ARCHIVE
+from .archive import DEFAULT_ARCHIVE, Archive
 from .fusion import fuse_and_rank
 from .http import FetchError, fetch_url
 from .models import SearchResult
 from .rank import rank_results
 from .text import collapse_space, normalize_url
-
 
 # Keep CLI subprocesses above the 20s HTTP fetch timeout so a slow-but-live
 # network call is not cut off, while still bounding a hung gh/op process.

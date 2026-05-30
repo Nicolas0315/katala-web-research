@@ -4,7 +4,7 @@ import json
 import sys
 from typing import Any
 
-from .archive import Archive, DEFAULT_ARCHIVE
+from .archive import DEFAULT_ARCHIVE, Archive
 from .brief import build_brief
 from .evaluation import build_eval_report, run_eval
 from .investigation import build_investigation_report, sort_web_candidates
@@ -13,7 +13,6 @@ from .planner import build_search_plan
 from .providers import search
 from .reader import read_url
 from .workflow import search_with_plan
-
 
 PROTOCOL_VERSION = "2025-11-25"
 

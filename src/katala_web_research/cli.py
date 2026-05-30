@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 from . import __version__
-from .archive import Archive, DEFAULT_ARCHIVE
+from .archive import DEFAULT_ARCHIVE, Archive
 from .brief import build_brief
 from .corpus import scan_repos
 from .evaluation import build_eval_report, run_eval
@@ -22,7 +22,6 @@ from .reader import read_url
 from .report import build_report
 from .source_registry import source_registry
 from .workflow import search_with_plan
-
 
 PROVIDER_CHOICES = ["brave", "ddg", "feed", "github", "jina", "meta", "openalex", "searxng"]
 
