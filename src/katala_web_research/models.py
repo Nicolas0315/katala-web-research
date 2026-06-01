@@ -96,6 +96,52 @@ class FeedHit:
 
 
 @dataclass(slots=True)
+class ProjectItem:
+    kind: str
+    repository: str
+    number: int
+    title: str
+    url: str
+    state: str
+    updated_at: str
+    labels: list[str] = field(default_factory=list)
+    priority: str = "p3"
+    status: str = ""
+    source: str = "github"
+
+    @property
+    def item_key(self) -> str:
+        return f"{self.repository}#{self.number}:{self.kind}"
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self) | {"item_key": self.item_key}
+
+
+@dataclass(slots=True)
+class ProjectHit:
+    kind: str
+    repository: str
+    number: int
+    title: str
+    url: str
+    state: str
+    updated_at: str
+    labels: list[str]
+    priority: str
+    status: str
+    source: str
+    rank: float
+    snippet: str
+
+    @property
+    def item_key(self) -> str:
+        return f"{self.repository}#{self.number}:{self.kind}"
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self) | {"item_key": self.item_key}
+
+
+@dataclass(slots=True)
 class RepoDocument:
     repo_path: str
     repo_name: str

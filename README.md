@@ -70,6 +70,14 @@ kwr sources list --domain news --query-type media_bias
 kwr sources match https://www.cisa.gov/known-exploited-vulnerabilities-catalog --json
 ```
 
+Ingest GitHub Issues and PRs into a local project radar archive:
+
+```sh
+kwr issues ingest --owner Nicolas0315 --archive ~/.kwr/projects.sqlite
+kwr issues query "aws p0" --archive ~/.kwr/projects.sqlite
+kwr issues report --archive ~/.kwr/projects.sqlite --out ~/work/docs/project-radar/latest.md
+```
+
 Plan a bounded research search before fetching pages:
 
 ```sh
