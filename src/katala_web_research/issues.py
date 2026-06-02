@@ -8,7 +8,6 @@ from typing import Any
 
 from .models import ProjectItem, utc_now_iso
 
-
 PRIORITY_ORDER = {"p0": 0, "p1": 1, "p2": 2, "p3": 3}
 GH_SEARCH_FIELDS = "repository,number,title,state,updatedAt,url,labels"
 
