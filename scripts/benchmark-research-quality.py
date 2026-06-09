@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import statistics
 import subprocess
 import sys
@@ -15,7 +14,6 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from katala_web_research.evaluation import default_eval_cases, run_eval  # noqa: E402
 from katala_web_research.providers import search  # noqa: E402
-
 
 EVAL_CASES = default_eval_cases()
 THEMES = [case.query for case in EVAL_CASES]

@@ -9,7 +9,6 @@ from katala_web_research.archive import Archive
 from katala_web_research.cli import main
 from katala_web_research.issues import build_project_radar, parse_gh_search_items
 
-
 GH_ISSUES = [
     {
         "number": 22,
