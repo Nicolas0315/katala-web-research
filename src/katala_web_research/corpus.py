@@ -43,6 +43,7 @@ DEFAULT_INCLUDE_NAMES = {
 }
 
 DEFAULT_INCLUDE_SUFFIXES = {".md", ".txt", ".rst", ".toml", ".json", ".yaml", ".yml"}
+TEXT_DECODING_CANDIDATES = ("utf-8-sig", "utf-8", "cp932", "shift_jis", "utf-16")
 DEFAULT_SKIP_DIRS = {
     ".git",
     ".hg",
@@ -232,7 +233,7 @@ def scan_repo(
             continue
         try:
             raw = path.read_bytes()
-            content = raw.decode("utf-8")
+            content = decode_text(raw)
         except UnicodeDecodeError:
             continue
         except OSError:
@@ -267,6 +268,15 @@ def scan_repo(
             )
         )
     return docs
+
+
+def decode_text(raw: bytes) -> str:
+    for encoding in TEXT_DECODING_CANDIDATES:
+        try:
+            return raw.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    raise UnicodeDecodeError("repo-corpus", raw, 0, len(raw), "unsupported text encoding")
 
 
 def iter_candidate_files(repo: Path):
