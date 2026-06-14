@@ -28,6 +28,20 @@ class CorpusTests(unittest.TestCase):
         self.assertIn("path:README.md", readme.context)
         self.assertIn("headings:Sample Repo", readme.context)
 
+    def test_scan_repos_preserves_cp932_japanese_docs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "sample"
+            (repo / ".git").mkdir(parents=True)
+            (repo / "README.md").write_bytes("# 日本語の見出し\n\n検証用の文章です。".encode("cp932"))
+
+            documents, warnings = scan_repos(tmp)
+
+        self.assertEqual(warnings, [])
+        readme = next(doc for doc in documents if doc.rel_path == "README.md")
+        self.assertEqual(readme.title, "日本語の見出し")
+        self.assertIn("検証用の文章", readme.content)
+        self.assertIn("headings:日本語の見出し", readme.context)
+
     def test_scan_repos_skips_unchanged_docs(self):
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp) / "sample"
