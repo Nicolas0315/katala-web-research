@@ -10,11 +10,16 @@ from .evaluation import build_eval_report, run_eval
 from .investigation import build_investigation_report, sort_web_candidates
 from .models import PageSnapshot, SearchResult
 from .planner import SearchPlanStep, build_search_plan
-from .providers import search
+from .providers import PROVIDERS, search
 from .reader import read_url
 from .workflow import search_with_plan
 
 PROTOCOL_VERSION = "2025-11-25"
+PROVIDER_NAMES = sorted(PROVIDERS)
+
+
+def _provider_schema(default: str = "ddg") -> dict[str, object]:
+    return {"type": "string", "default": default, "enum": PROVIDER_NAMES}
 
 
 TOOLS = [
@@ -37,7 +42,7 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "query": {"type": "string"},
-                "provider": {"type": "string", "default": "ddg"},
+                "provider": _provider_schema(),
                 "limit": {"type": "integer", "default": 5},
                 "archive": {"type": "string", "default": str(DEFAULT_ARCHIVE)},
             },
@@ -114,7 +119,7 @@ TOOLS = [
             "properties": {
                 "query": {"type": "string"},
                 "archive": {"type": "string", "default": str(DEFAULT_ARCHIVE)},
-                "provider": {"type": "string", "default": "ddg"},
+                "provider": _provider_schema(),
                 "web_limit": {"type": "integer", "default": 5},
                 "repo_limit": {"type": "integer", "default": 5},
                 "feed_limit": {"type": "integer", "default": 0},
@@ -133,7 +138,7 @@ TOOLS = [
             "properties": {
                 "query": {"type": "string"},
                 "archive": {"type": "string", "default": str(DEFAULT_ARCHIVE)},
-                "provider": {"type": "string", "default": "ddg"},
+                "provider": _provider_schema(),
                 "reader": {"type": "string", "default": "auto"},
                 "web_limit": {"type": "integer", "default": 8},
                 "repo_limit": {"type": "integer", "default": 6},

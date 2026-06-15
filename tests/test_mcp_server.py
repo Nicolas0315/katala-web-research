@@ -26,6 +26,12 @@ class McpServerTests(unittest.TestCase):
         self.assertIn("kwr.feeds_query", names)
         self.assertIn("kwr.investigate", names)
 
+    def test_search_tool_lists_github_code_provider(self):
+        response = handle_request({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
+        tools = {tool["name"]: tool for tool in response["result"]["tools"]}
+        provider_schema = tools["kwr.search"]["inputSchema"]["properties"]["provider"]
+        self.assertIn("github_code", provider_schema["enum"])
+
     def test_main_skips_malformed_frame_and_continues(self):
         frames = [ValueError("bad json body"), None]
 

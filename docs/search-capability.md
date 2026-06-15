@@ -34,6 +34,7 @@ The search surface supports multiple backends with different failure modes:
 - `ddg`: no-key default web search for a cheap first pass.
 - `feed`: local RSS/Atom/JSON Feed archive search for monitored sources.
 - `github`: GitHub CLI or GitHub REST repository search for primary code sources.
+- `github_code`: GitHub REST code search for token-gated code-result snippets.
 - `jina`: optional semantic web search through `JINA_API_KEY`.
 - `searxng`: optional private metasearch through `KWR_SEARXNG_URL`.
 - `brave`: optional Brave Web Search API through `BRAVE_SEARCH_API_KEY`.
@@ -239,6 +240,8 @@ This is the command to use when the goal is "research this well", not just "sear
 - `kwr.repos_query`
 - `kwr.brief`
 - `kwr.investigate`
+
+The MCP `kwr.search`, `kwr.brief`, and `kwr.investigate` schemas expose the current provider enum, including token-gated providers such as `github_code`, so client agents can discover the same provider surface as the CLI.
 
 This improves practical search ability because Codex, Claude Code, Gemini CLI, or another MCP client can ask the same local archive and provider layer instead of relying only on each agent's built-in web behavior.
 

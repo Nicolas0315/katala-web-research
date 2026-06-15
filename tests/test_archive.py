@@ -123,6 +123,147 @@ class ArchiveTests(unittest.TestCase):
 
             self.assertEqual({hit.rel_path for hit in hits}, {"both.md"})
 
+    def test_repo_query_weights_title_above_body(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive_path = Path(tmp) / "archive.sqlite"
+            archive = Archive(archive_path)
+            try:
+                archive.upsert_repo_documents(
+                    [
+                        RepoDocument(
+                            repo_path="/repos/sample",
+                            repo_name="sample",
+                            rel_path="title.md",
+                            title="Needle guide",
+                            content="short overview",
+                            kind="doc",
+                            indexed_at="2026-05-27T00:00:00+00:00",
+                        ),
+                        RepoDocument(
+                            repo_path="/repos/sample",
+                            repo_name="sample",
+                            rel_path="body.md",
+                            title="Body only",
+                            content="needle reference",
+                            kind="doc",
+                            indexed_at="2026-05-27T00:00:00+00:00",
+                        ),
+                    ]
+                )
+                hits = archive.query_repos("needle", limit=10)
+            finally:
+                archive.close()
+
+        self.assertEqual([hit.rel_path for hit in hits], ["title.md", "body.md"])
+
+    def test_repo_query_can_filter_by_repo_and_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive_path = Path(tmp) / "archive.sqlite"
+            archive = Archive(archive_path)
+            try:
+                archive.upsert_repo_documents(
+                    [
+                        RepoDocument(
+                            repo_path="/repos/alpha",
+                            repo_name="alpha",
+                            rel_path="docs/search.md",
+                            title="Search",
+                            content="retrieval filter",
+                            kind="doc",
+                            indexed_at="2026-05-27T00:00:00+00:00",
+                        ),
+                        RepoDocument(
+                            repo_path="/repos/beta",
+                            repo_name="beta",
+                            rel_path="docs/search.md",
+                            title="Search",
+                            content="retrieval filter",
+                            kind="doc",
+                            indexed_at="2026-05-27T00:00:00+00:00",
+                        ),
+                        RepoDocument(
+                            repo_path="/repos/alpha",
+                            repo_name="alpha",
+                            rel_path="notes/search.txt",
+                            title="Search Notes",
+                            content="retrieval filter",
+                            kind="doc",
+                            indexed_at="2026-05-27T00:00:00+00:00",
+                        ),
+                    ]
+                )
+                hits = archive.query_repos("retrieval filter", limit=10, repo="alpha", path="docs/")
+            finally:
+                archive.close()
+
+        self.assertEqual([(hit.repo_name, hit.rel_path) for hit in hits], [("alpha", "docs/search.md")])
+
+    def test_repo_query_accepts_inline_repo_and_path_filters(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive_path = Path(tmp) / "archive.sqlite"
+            archive = Archive(archive_path)
+            try:
+                archive.upsert_repo_documents(
+                    [
+                        RepoDocument(
+                            repo_path="/repos/alpha",
+                            repo_name="alpha",
+                            rel_path="docs/search.md",
+                            title="Search",
+                            content="retrieval filter",
+                            kind="doc",
+                            indexed_at="2026-05-27T00:00:00+00:00",
+                        ),
+                        RepoDocument(
+                            repo_path="/repos/beta",
+                            repo_name="beta",
+                            rel_path="docs/search.md",
+                            title="Search",
+                            content="retrieval filter",
+                            kind="doc",
+                            indexed_at="2026-05-27T00:00:00+00:00",
+                        ),
+                    ]
+                )
+                hits = archive.query_repos("repo:alpha path:docs/ retrieval filter", limit=10)
+            finally:
+                archive.close()
+
+        self.assertEqual([(hit.repo_name, hit.rel_path) for hit in hits], [("alpha", "docs/search.md")])
+
+    def test_repo_query_flag_filters_override_inline_filters(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive_path = Path(tmp) / "archive.sqlite"
+            archive = Archive(archive_path)
+            try:
+                archive.upsert_repo_documents(
+                    [
+                        RepoDocument(
+                            repo_path="/repos/alpha",
+                            repo_name="alpha",
+                            rel_path="docs/search.md",
+                            title="Search",
+                            content="retrieval filter",
+                            kind="doc",
+                            indexed_at="2026-05-27T00:00:00+00:00",
+                        ),
+                        RepoDocument(
+                            repo_path="/repos/beta",
+                            repo_name="beta",
+                            rel_path="docs/search.md",
+                            title="Search",
+                            content="retrieval filter",
+                            kind="doc",
+                            indexed_at="2026-05-27T00:00:00+00:00",
+                        ),
+                    ]
+                )
+                hits = archive.query_repos("repo:alpha retrieval filter", limit=10, repo="beta")
+            finally:
+                archive.close()
+
+        self.assertEqual([(hit.repo_name, hit.rel_path) for hit in hits], [("beta", "docs/search.md")])
+
 
 if __name__ == "__main__":
     unittest.main()

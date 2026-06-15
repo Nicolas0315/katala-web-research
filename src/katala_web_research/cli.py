@@ -10,6 +10,7 @@ from pathlib import Path
 
 from . import __version__
 from .archive import DEFAULT_ARCHIVE, Archive
+from .archive_highlights import apply_archive_highlights
 from .brief import build_brief
 from .corpus import scan_repos
 from .evaluation import build_eval_report, run_eval
@@ -18,13 +19,14 @@ from .investigation import build_investigation_report, sort_web_candidates
 from .issues import build_project_radar, fetch_github_project_items, load_project_items_json
 from .models import FeedSource, PageSnapshot, SearchResult, utc_now_iso
 from .planner import SearchPlanStep, build_search_plan
-from .providers import provider_status, search
+from .providers import provider_status, search, searxng_preflight
+from .query_builder import build_search_query, categorize_url
 from .reader import read_url
 from .report import build_report
 from .source_registry import source_registry
-from .workflow import search_with_plan
+from .workflow import enrich_search_results, search_with_plan
 
-PROVIDER_CHOICES = ["brave", "ddg", "feed", "github", "jina", "meta", "openalex", "searxng"]
+PROVIDER_CHOICES = ["brave", "ddg", "feed", "github", "github_code", "jina", "meta", "openalex", "searxng"]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -46,7 +48,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_search.add_argument("query")
     p_search.add_argument("--provider", default="ddg", choices=PROVIDER_CHOICES)
     p_search.add_argument("--limit", "-n", type=int, default=10)
+    p_search.add_argument("--candidate-multiplier", type=float, default=2.0)
     p_search.add_argument("--archive", default=str(DEFAULT_ARCHIVE))
+    p_search.add_argument("--category", action="append", choices=["github", "research", "pdf"], default=[])
+    p_search.add_argument("--include-domain", action="append", default=[])
+    p_search.add_argument("--exclude-domain", action="append", default=[])
+    p_search.add_argument("--enrich-top", type=int, default=0)
+    p_search.add_argument("--highlight-top", type=int, default=0)
+    p_search.add_argument("--reader", default="auto", choices=["auto", "jina", "direct"])
     p_search.add_argument("--json", action="store_true")
     p_search.set_defaults(func=cmd_search)
 
@@ -97,6 +106,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_repos_query.add_argument("terms")
     p_repos_query.add_argument("--archive", default=str(DEFAULT_ARCHIVE))
     p_repos_query.add_argument("--limit", "-n", type=int, default=10)
+    p_repos_query.add_argument("--repo", default="", help="restrict results to one repository name")
+    p_repos_query.add_argument("--path", default="", help="restrict results to paths containing this text")
     p_repos_query.add_argument("--json", action="store_true")
     p_repos_query.set_defaults(func=cmd_repos_query)
 
@@ -170,6 +181,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_brief.add_argument("--web-limit", type=int, default=5)
     p_brief.add_argument("--repo-limit", type=int, default=5)
     p_brief.add_argument("--feed-limit", type=int, default=0)
+    p_brief.add_argument("--candidate-multiplier", type=float, default=2.0)
     p_brief.add_argument("--expand-queries", action="store_true")
     p_brief.add_argument("--max-subqueries", type=int, default=4)
     p_brief.add_argument("--no-web", action="store_true")
@@ -188,6 +200,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_investigate.add_argument("--web-limit", type=int, default=8)
     p_investigate.add_argument("--repo-limit", type=int, default=6)
     p_investigate.add_argument("--feed-limit", type=int, default=0)
+    p_investigate.add_argument("--candidate-multiplier", type=float, default=2.0)
     p_investigate.add_argument("--read-top", type=int, default=3)
     p_investigate.add_argument("--expand-queries", action="store_true")
     p_investigate.add_argument("--max-subqueries", type=int, default=4)
@@ -197,6 +210,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_investigate.set_defaults(func=cmd_investigate)
 
     p_doctor = sub.add_parser("doctor", help="show provider and local archive capability")
+    p_doctor.add_argument("--check-searxng", action="store_true", help="probe configured SearXNG JSON API")
     p_doctor.set_defaults(func=cmd_doctor)
 
     p_eval = sub.add_parser("eval", help="run deterministic research-quality benchmark cases")
@@ -212,13 +226,74 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def cmd_search(args: argparse.Namespace) -> int:
+    built_query = build_search_query(
+        args.query,
+        categories=args.category,
+        include_domains=args.include_domain,
+        exclude_domains=args.exclude_domain,
+    )
     with archive_env(args.archive):
-        results = search(args.query, provider=args.provider, limit=args.limit)
+        results = search(
+            built_query.query,
+            provider=args.provider,
+            limit=_candidate_limit(args.limit, args.candidate_multiplier),
+        )
+    results = [
+        _annotate_query_category(
+            result,
+            category_domains=built_query.category_domains,
+            pdf_requested=built_query.pdf_requested,
+        )
+        for result in results
+    ]
+    results = enrich_search_results(
+        args.query,
+        results,
+        read_top=args.enrich_top,
+        reader=args.reader,
+    )[: args.limit]
+    results = apply_archive_highlights(
+        args.query,
+        results,
+        archive_path=args.archive,
+        highlight_top=args.highlight_top,
+    )[: args.limit]
     if args.json:
         print_json([result.to_dict() for result in results])
     else:
         print_results(results)
     return 0
+
+
+def _annotate_query_category(
+    result: SearchResult,
+    *,
+    category_domains: dict[str, str],
+    pdf_requested: bool,
+) -> SearchResult:
+    category = categorize_url(
+        result.url,
+        category_domains=category_domains,
+        pdf_requested=pdf_requested,
+    )
+    if not category:
+        return result
+    metadata = dict(result.metadata)
+    metadata["query_category"] = category
+    return SearchResult(
+        title=result.title,
+        url=result.url,
+        snippet=result.snippet,
+        source=result.source,
+        published_at=result.published_at,
+        rank=result.rank,
+        score=result.score,
+        metadata=metadata,
+    )
+
+
+def _candidate_limit(limit: int, multiplier: float) -> int:
+    return max(limit, int((max(limit, 1) * max(multiplier, 1.0)) + 0.9999))
 
 
 def cmd_read(args: argparse.Namespace) -> int:
@@ -357,7 +432,7 @@ def cmd_repos_scan(args: argparse.Namespace) -> int:
 def cmd_repos_query(args: argparse.Namespace) -> int:
     archive = Archive(args.archive)
     try:
-        hits = archive.query_repos(args.terms, limit=args.limit)
+        hits = archive.query_repos(args.terms, limit=args.limit, repo=args.repo, path=args.path)
     finally:
         archive.close()
     if args.json:
@@ -586,6 +661,7 @@ def cmd_brief(args: argparse.Namespace) -> int:
                 limit=args.web_limit,
                 expand_queries=args.expand_queries,
                 max_subqueries=args.max_subqueries,
+                candidate_multiplier=args.candidate_multiplier,
             )
     archive = Archive(args.archive)
     try:
@@ -636,6 +712,7 @@ def cmd_investigate(args: argparse.Namespace) -> int:
                 limit=args.web_limit,
                 expand_queries=args.expand_queries,
                 max_subqueries=args.max_subqueries,
+                candidate_multiplier=args.candidate_multiplier,
             )
     archive = Archive(args.archive)
     pages: list[PageSnapshot] = []
@@ -700,6 +777,9 @@ def cmd_investigate(args: argparse.Namespace) -> int:
 def cmd_doctor(args: argparse.Namespace) -> int:
     for row in provider_status():
         print(f"{row['provider']}: {row['status']} - {row['detail']}")
+    if args.check_searxng:
+        probe = searxng_preflight()
+        print(f"searxng_preflight: {probe['status']} - results={probe['result_count']} status={probe['status_code']}")
     with sqlite3.connect(":memory:") as conn:
         conn.execute("CREATE VIRTUAL TABLE probe USING fts5(value)")
     print("sqlite_fts5: ok")

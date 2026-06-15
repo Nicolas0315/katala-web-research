@@ -26,6 +26,8 @@ def rank_results(query: str, results: list[SearchResult]) -> list[SearchResult]:
         if not _passes_search_gates(result):
             continue
         seen.add(normalized)
+        if result.rank and "provider_rank" not in result.metadata:
+            result.metadata["provider_rank"] = result.rank
         source_weight = 0.25 if result.source in {"github", "jina"} else 0.0
         fusion_weight = min(float(result.metadata.get("rrf_score", 0.0)) * 20, 0.75)
         consensus_weight = min(max(0, int(result.metadata.get("source_count", 1)) - 1) * 0.2, 0.6)

@@ -33,6 +33,11 @@ Search the web with a no-key default provider:
 kwr search "agent web research tools" --limit 5
 kwr search "agent web research tools" --provider meta --limit 8
 kwr search "agent web research tools" --provider meta --json
+kwr search "agent web research tools" --provider meta --limit 8 --enrich-top 3
+kwr search "agent web research tools" --provider meta --limit 8 --highlight-top 5
+kwr search "agent web research tools" --provider meta --limit 8 --candidate-multiplier 2
+kwr search "agent web research tools" --category github --include-domain docs.github.com --exclude-domain gist.github.com
+kwr doctor --check-searxng
 ```
 
 Read a URL:
@@ -89,6 +94,8 @@ Index local Git repositories into the same archive:
 ```sh
 kwr repos scan ~/Documents/GitHub --archive ~/.kwr/research.sqlite
 kwr repos query "web research provider" --archive ~/.kwr/research.sqlite
+kwr repos query "web research provider" --repo katala-web-research --path docs/ --archive ~/.kwr/research.sqlite
+kwr repos query "repo:katala-web-research path:docs/ web research provider" --archive ~/.kwr/research.sqlite
 ```
 
 Build a combined brief from web search plus the indexed local corpus:
@@ -131,19 +138,21 @@ Default providers avoid secrets:
 - `ddg`: DuckDuckGo HTML endpoint for general web search
 - `feed`: local RSS/Atom/JSON Feed archive search
 - `github`: GitHub REST search or `gh search repos` when the GitHub CLI is available
+- `github_code`: GitHub REST code search with text-match metadata when `GITHUB_TOKEN` is set
 - `jina-reader`: clean URL reading through `https://r.jina.ai/`
 - `direct`: direct HTTP fetch with a conservative text extractor
 
 Optional providers use environment variables only:
 
 - `JINA_API_KEY` for Jina search
-- `GITHUB_TOKEN` for higher GitHub REST API limits
+- `GITHUB_TOKEN` for higher GitHub REST API limits and `github_code` provider access. GitHub repository results include language, topics, license, stars, homepage, and clone URL metadata when the API returns them.
 - `KWR_SEARXNG_URL` for a private SearXNG instance with JSON enabled
-- `BRAVE_SEARCH_API_KEY` for Brave Web Search API
-- `OPENALEX_API_KEY` for OpenAlex scholarly works search
+- `BRAVE_SEARCH_API_KEY` for Brave Web Search API. Optional `BRAVE_SEARCH_COUNTRY`, `BRAVE_SEARCH_LANG`, `BRAVE_UI_LANG`, `BRAVE_FRESHNESS`, and `BRAVE_SAFESEARCH` tune localization, freshness, and safety filtering. Large Brave requests page through the official `offset` parameter up to the API maximum.
+- `OPENALEX_API_KEY`, `OPENALEX_MAILTO`, `OPENALEX_LANGUAGE`, `OPENALEX_YEAR`, `OPENALEX_FROM_DATE`, `OPENALEX_TO_DATE`, `OPENALEX_HAS_PDF`, and `OPENALEX_HAS_ABSTRACT` for optional OpenAlex scholarly works API identification, language filtering, publication-date filtering, and full-text/abstract candidate filtering
 - `KWR_META_PROFILE` for metasearch profiles: `broad`, `docs`, `scholarly`, `code`, `fresh`, `local`
 - `KWR_META_PROVIDERS` to override profile providers, for example `ddg,github,openalex,searxng`
-- `KWR_SEARXNG_CATEGORIES`, `KWR_SEARXNG_ENGINES`, `KWR_SEARXNG_LANGUAGE`, `KWR_SEARXNG_TIME_RANGE`, `KWR_SEARXNG_SAFESEARCH` for SearXNG API pass-through
+- `KWR_SEARXNG_CATEGORIES`, `KWR_SEARXNG_ENGINES`, `KWR_SEARXNG_LANGUAGE`, `KWR_SEARXNG_TIME_RANGE`, `KWR_SEARXNG_SAFESEARCH` for SearXNG API pass-through. `time_range` accepts `day`, `week`, `month`, or `year`; `safesearch` accepts `0`, `1`, or `2`.
+- `KWR_HTTP_TIMEOUT_SECONDS` to tune the default HTTP fetch timeout for providers and readers.
 
 The CLI never writes those values into archives, reports, logs, or config files.
 
@@ -151,7 +160,7 @@ The CLI never writes those values into archives, reports, logs, or config files.
 
 ## Local Repository Corpus
 
-`kwr repos scan` indexes README, AGENTS, Skill files, project manifests, and small text docs from Git repositories under a root path. It skips `.git`, `node_modules`, caches, raw downloads, logs, sessions, build outputs, and vendored directories.
+`kwr repos scan` indexes README, AGENTS, Skill files, project manifests, and small text docs from Git repositories under a root path. It skips `.git`, `node_modules`, caches, raw downloads, logs, sessions, build outputs, and vendored directories. Use `kwr repos query --repo NAME --path TEXT` or inline `repo:NAME path:TEXT` terms to scope local retrieval.
 
 The command is designed for a local repository corpus such as `~/Documents/GitHub`, but also works with any readable repository folder. If macOS blocks that folder with TCC permissions, grant terminal access and rerun the same command; no code change is needed.
 
@@ -204,6 +213,7 @@ GitHub Flow and contribution expectations are documented in
 - [docs/domain-validation-benchmark-plan-2026-05-28.md](docs/domain-validation-benchmark-plan-2026-05-28.md): adoption, implementation, and domain-category benchmark design.
 - [docs/trusted-source-registry-2026-05-29.md](docs/trusted-source-registry-2026-05-29.md): domain-specific trusted source and bias metadata registry.
 - [docs/metasearch-engine-design.md](docs/metasearch-engine-design.md): SearXNG-inspired Katala metasearch design.
+- [docs/firecrawl-search-re-source-notes-2026-06-15.md](docs/firecrawl-search-re-source-notes-2026-06-15.md): Firecrawl search source analysis and Katala adaptation notes.
 - [docs/metasearch-enhancement-research-2026-05-27.md](docs/metasearch-enhancement-research-2026-05-27.md): next OSS techniques to strengthen metasearch.
 - [docs/metasearch-implementation-plan-2026-05-27.md](docs/metasearch-implementation-plan-2026-05-27.md): implementation plan and verification boundary.
 - [docs/feed-provider-implementation-plan-2026-05-28.md](docs/feed-provider-implementation-plan-2026-05-28.md): RSS/Atom/JSON Feed provider implementation plan.

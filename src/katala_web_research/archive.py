@@ -290,6 +290,27 @@ class Archive:
         )
         self.conn.commit()
 
+    def page_by_url(self, url: str) -> PageSnapshot | None:
+        row = self.conn.execute(
+            """
+            SELECT url, title, content, source, fetched_at, status_code, content_type
+            FROM pages
+            WHERE url = ?
+            """,
+            (url,),
+        ).fetchone()
+        if row is None:
+            return None
+        return PageSnapshot(
+            url=row["url"],
+            title=row["title"],
+            content=row["content"],
+            source=row["source"],
+            fetched_at=row["fetched_at"],
+            status_code=row["status_code"],
+            content_type=row["content_type"],
+        )
+
     def upsert_repo_document(self, document: RepoDocument) -> None:
         self.conn.execute(_REPO_UPSERT_SQL, _repo_upsert_params(document))
         self.conn.commit()
@@ -481,21 +502,27 @@ class Archive:
             for row in rows
         ]
 
-    def query_repos(self, terms: str, *, limit: int = 10) -> list[RepoHit]:
+    def query_repos(
+        self, terms: str, *, limit: int = 10, repo: str = "", path: str = ""
+    ) -> list[RepoHit]:
+        parsed_terms, inline_repo, inline_path = _parse_repo_query_terms(terms)
+        repo = repo or inline_repo
+        path = path or inline_path
+        filters, params = _repo_filters(repo=repo, path=path)
         rows = self.conn.execute(
-            """
+            f"""
             SELECT d.repo_path, d.repo_name, d.rel_path, d.title,
                    snippet(repo_documents_fts, 4, '[', ']', '...', 18) AS snippet,
                    d.kind,
-                   bm25(repo_documents_fts) AS rank,
+                   bm25(repo_documents_fts, 2.0, 1.6, 2.4, 1.8, 1.0) AS rank,
                    d.indexed_at
             FROM repo_documents_fts
             JOIN repo_documents d ON d.id = repo_documents_fts.rowid
-            WHERE repo_documents_fts MATCH ?
+            WHERE repo_documents_fts MATCH ?{filters}
             ORDER BY rank
             LIMIT ?
             """,
-            (_fts_query(terms), limit),
+            (_fts_query(parsed_terms), *params, limit),
         ).fetchall()
         return [
             RepoHit(
@@ -657,3 +684,34 @@ def _fts_query(terms: str) -> str:
     if not tokens:
         return '""'
     return " ".join(f'"{token}"' for token in tokens)
+
+
+def _parse_repo_query_terms(terms: str) -> tuple[str, str, str]:
+    query_tokens: list[str] = []
+    repo = ""
+    path = ""
+    for token in terms.split():
+        if token.startswith("repo:") and len(token) > len("repo:"):
+            repo = repo or token.split(":", 1)[1]
+            continue
+        if token.startswith("path:") and len(token) > len("path:"):
+            path = path or token.split(":", 1)[1]
+            continue
+        query_tokens.append(token)
+    return " ".join(query_tokens), repo, path
+
+
+def _repo_filters(*, repo: str = "", path: str = "") -> tuple[str, tuple[str, ...]]:
+    clauses: list[str] = []
+    params: list[str] = []
+    if repo:
+        clauses.append(" AND d.repo_name = ?")
+        params.append(repo)
+    if path:
+        clauses.append(" AND d.rel_path LIKE ? ESCAPE '\\'")
+        params.append(f"%{_escape_like(path)}%")
+    return "".join(clauses), tuple(params)
+
+
+def _escape_like(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")

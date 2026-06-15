@@ -34,6 +34,14 @@ PYTHONPATH=src python3 -m katala_web_research.cli brief prompt --archive /tmp/kw
   - Decision: do not make Firecrawl a default dependency; leave it as a future provider because it is API-service oriented.
 - GitHub REST Search API: `https://docs.github.com/en/rest/search/search`
   - Decision: support GitHub repo search through `gh` first, REST fallback second, and optional `GITHUB_TOKEN`.
+- GitHub REST Search API code search: `https://docs.github.com/en/rest/search/search?apiVersion=2022-11-28#search-code`
+  - Retrieved: 2026-06-15
+  - Local version/config: provider sends `X-GitHub-Api-Version: 2022-11-28` and `Accept: application/vnd.github.text-match+json`.
+  - Decision: add `github_code` as an explicit token-gated provider rather than merging code snippets into repository discovery results. Page through code search with the official `page` query parameter, and treat invalid syntax HTTP 422 responses as empty results.
+  - Verification command: `PYTHONPATH=src python -m unittest tests.test_providers`.
+  - Risk: code search auth/rate limits can make this provider unavailable; `provider_status` reports it `off` without `GITHUB_TOKEN`.
+  - Rollback: remove `github_code` from `PROVIDERS` and from the `code` metasearch profile.
+  - Next refresh: 2026-07-15
 - Model Context Protocol specification: `https://modelcontextprotocol.info/specification/2025-11-25`
   - Decision: expose the toolkit through stdio JSON-RPC with `initialize`, `tools/list`, and `tools/call`, keeping tools read-oriented and user-controlled.
 - SearXNG Search API docs: `https://docs.searxng.org/dev/search_api.html`
@@ -47,6 +55,34 @@ PYTHONPATH=src python3 -m katala_web_research.cli brief prompt --archive /tmp/kw
 - OpenAlex API authentication docs: `https://developers.openalex.org/api-reference/authentication`
   - Retrieved: 2026-05-27
   - Decision: require `OPENALEX_API_KEY`, support 1Password `op://` references, and keep concrete credentials out of tracked files.
+- OpenAlex filtering docs: `https://developers.openalex.org/guides/filtering`
+  - Retrieved: 2026-06-15
+  - Decision: map `OPENALEX_FROM_DATE` and `OPENALEX_TO_DATE` to official `from_publication_date` and `to_publication_date` convenience filters, combined with existing language/year filters in one `filter=` parameter.
+  - Verification command: `PYTHONPATH=src python -m unittest tests.test_providers`.
+  - Risk: OpenAlex accepts richer filter syntax than Katala exposes; Katala only validates and passes `YYYY-MM-DD` dates for now.
+  - Rollback: unset `OPENALEX_FROM_DATE` and `OPENALEX_TO_DATE`, or remove their helper calls from `_openalex_params`.
+  - Next refresh: 2026-07-15
+- OpenAlex Works schema docs: `https://developers.openalex.org/api-reference/works/get-a-single-work`
+  - Retrieved: 2026-06-15
+  - Decision: retain OpenAlex `primary_location`, `best_oa_location`, and `content_url` links in result metadata so downstream readers can choose landing pages, PDFs, or OpenAlex cached content.
+  - Verification command: `PYTHONPATH=src python -m unittest tests.test_providers`.
+  - Risk: some works omit PDF or OA location fields; metadata is sparse and only non-empty fields are stored.
+  - Rollback: remove `_openalex_metadata` assignment from `OpenAlexSearch.search`.
+  - Next refresh: 2026-07-15
+- OpenAlex paging docs: `https://developers.openalex.org/guides/page-through-results`
+  - Retrieved: 2026-06-15
+  - Decision: use official cursor paging (`cursor=*`, then `meta.next_cursor`) for bounded multi-page scholarly candidate retrieval.
+  - Verification command: `PYTHONPATH=src python -m unittest tests.test_providers`.
+  - Risk: cursor paging should not be used to bulk-download OpenAlex; Katala stops at the requested limit.
+  - Rollback: remove cursor handling from `OpenAlexSearch.search` and return to a single `per_page <= 100` request.
+  - Next refresh: 2026-07-15
+- OpenAlex full-text and abstract filter docs: `https://developers.openalex.org/guides/recipes`, `https://developers.openalex.org/download/full-text-pdfs`, `https://developers.openalex.org/api-reference/works/get-a-single-work`
+  - Retrieved: 2026-06-15
+  - Decision: map `OPENALEX_HAS_PDF` and `OPENALEX_HAS_ABSTRACT` to official `has_content.pdf` and `has_abstract` filters for candidate filtering only.
+  - Verification command: `PYTHONPATH=src python -m unittest tests.test_providers`.
+  - Risk: `has_content.pdf:true` finds downloadable-content candidates; actual content API downloads may require API key and usage costs. Katala search does not download content here.
+  - Rollback: unset `OPENALEX_HAS_PDF` and `OPENALEX_HAS_ABSTRACT`, or remove their helper calls from `_openalex_params`.
+  - Next refresh: 2026-07-15
 - Brave Search API docs: `https://api-dashboard.search.brave.com/app/documentation/web-search/get-started`
   - Decision: support optional `BRAVE_SEARCH_API_KEY` provider for the official Web Search API endpoint.
 

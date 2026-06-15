@@ -84,6 +84,7 @@ class GitHubRepoSearch:
                 source=self.name,
                 published_at=item.get("updatedAt"),
                 rank=idx,
+                metadata=_github_metadata(item),
             )
             for idx, item in enumerate(items, start=1)
             if item.get("url")
@@ -97,28 +98,83 @@ class GitHubRepoSearch:
         token = os.environ.get("GITHUB_TOKEN")
         if token:
             headers["Authorization"] = f"Bearer {token}"
+        headers["X-GitHub-Api-Version"] = "2022-11-28"
         response = fetch_url(url, headers=headers)
         payload = _parse_json(response.text, url)
-        results = []
+        results: list[SearchResult] = []
         for idx, item in enumerate(payload.get("items", []), start=1):
+            normalized = _github_rest_item(item)
             results.append(
                 SearchResult(
                     title=item.get("full_name") or item.get("html_url") or "",
                     url=item.get("html_url") or "",
-                    snippet=_github_snippet(
-                        {
-                            "description": item.get("description"),
-                            "stargazersCount": item.get("stargazers_count"),
-                            "updatedAt": item.get("updated_at"),
-                            "isFork": item.get("fork"),
-                        }
-                    ),
+                    snippet=_github_snippet(normalized),
                     source=self.name,
                     published_at=item.get("updated_at"),
                     rank=idx,
+                    metadata=_github_metadata(normalized),
                 )
             )
         return results
+
+
+class GitHubCodeSearch:
+    name = "github_code"
+
+    def search(self, query: str, *, limit: int = 10) -> list[SearchResult]:
+        token = os.environ.get("GITHUB_TOKEN", "").strip()
+        if not token:
+            raise FetchError("GITHUB_TOKEN is required for GitHub code search")
+        requested = max(limit, 0)
+        if requested == 0:
+            return []
+        per_page = 100
+        max_pages = 10
+        pages = min(max_pages, max(1, (requested + per_page - 1) // per_page))
+        results: list[SearchResult] = []
+        for page in range(1, pages + 1):
+            url = "https://api.github.com/search/code?" + urlencode(
+                _github_code_params(query, page=page, per_page=per_page)
+            )
+            try:
+                response = fetch_url(
+                    url,
+                    headers=_github_code_headers(token),
+                )
+            except FetchError as exc:
+                if _github_code_invalid_query(exc):
+                    return []
+                raise
+            payload = _parse_json(response.text, url)
+            page_items = payload.get("items", [])
+            if not page_items:
+                break
+            for item in page_items:
+                if len(results) >= requested:
+                    break
+                repo = item.get("repository") or {}
+                fragment = _github_code_fragment(item.get("text_matches"))
+                path = str(item.get("path") or item.get("name") or "")
+                repo_name = str(repo.get("full_name") or "")
+                results.append(
+                    SearchResult(
+                        title=_github_code_title(repo_name, path, item.get("html_url")),
+                        url=item.get("html_url") or "",
+                        snippet=_github_code_snippet(repo, path, fragment),
+                        source=self.name,
+                        rank=len(results) + 1,
+                        metadata={
+                            "repository": repo_name,
+                            "repository_url": repo.get("html_url") or "",
+                            "path": path,
+                            "file_name": item.get("name") or "",
+                            "fragment": fragment,
+                        },
+                    )
+                )
+            if len(results) >= requested:
+                break
+        return rank_results(query, results)
 
 
 class FeedSearch:
@@ -164,7 +220,7 @@ class JinaSearch:
         )
         payload = _parse_json(response.text, url)
         data = payload.get("data", payload if isinstance(payload, list) else [])
-        results = []
+        results: list[SearchResult] = []
         for idx, item in enumerate(data[:limit], start=1):
             results.append(
                 SearchResult(
@@ -186,21 +242,34 @@ class SearxngSearch:
         base_url = os.environ.get("KWR_SEARXNG_URL", "").rstrip("/")
         if not base_url:
             raise FetchError("KWR_SEARXNG_URL is required for SearXNG search")
-        url = base_url + "/search?" + urlencode(_searxng_params(query))
-        response = fetch_url(url, headers={"Accept": "application/json"})
-        payload = _parse_json(response.text, url)
-        results = []
-        for idx, item in enumerate(payload.get("results", [])[:limit], start=1):
-            results.append(
-                SearchResult(
-                    title=item.get("title") or item.get("url") or "",
-                    url=item.get("url") or "",
-                    snippet=item.get("content") or "",
-                    source=self.name,
-                    published_at=item.get("publishedDate"),
-                    rank=idx,
+        requested = max(limit, 0)
+        if requested == 0:
+            return []
+        page_size = 20
+        pages = max(1, (requested + page_size - 1) // page_size)
+        results: list[SearchResult] = []
+        for page in range(1, pages + 1):
+            url = base_url + "/search?" + urlencode(_searxng_params(query, page=page))
+            response = fetch_url(url, headers={"Accept": "application/json"})
+            payload = _parse_json(response.text, url)
+            page_results = payload.get("results", [])
+            if not page_results:
+                break
+            for item in page_results:
+                if len(results) >= requested:
+                    break
+                results.append(
+                    SearchResult(
+                        title=item.get("title") or item.get("url") or "",
+                        url=item.get("url") or "",
+                        snippet=item.get("content") or "",
+                        source=self.name,
+                        published_at=item.get("publishedDate"),
+                        rank=len(results) + 1,
+                    )
                 )
-            )
+            if len(results) >= requested:
+                break
         return rank_results(query, results)
 
 
@@ -211,30 +280,43 @@ class BraveSearch:
         token = os.environ.get("BRAVE_SEARCH_API_KEY")
         if not token:
             raise FetchError("BRAVE_SEARCH_API_KEY is required for Brave search")
-        url = "https://api.search.brave.com/res/v1/web/search?" + urlencode(
-            {"q": query, "count": min(limit, 20)}
-        )
-        response = fetch_url(
-            url,
-            headers={
-                "Accept": "application/json",
-                "X-Subscription-Token": token,
-            },
-        )
-        payload = _parse_json(response.text, url)
-        web_results = (payload.get("web") or {}).get("results", [])
-        results = []
-        for idx, item in enumerate(web_results[:limit], start=1):
-            results.append(
-                SearchResult(
-                    title=item.get("title") or item.get("url") or "",
-                    url=item.get("url") or "",
-                    snippet=item.get("description") or "",
-                    source=self.name,
-                    published_at=item.get("age"),
-                    rank=idx,
-                )
+        requested = max(limit, 0)
+        if requested == 0:
+            return []
+        page_size = 20
+        max_pages = 10
+        pages = min(max_pages, max(1, (requested + page_size - 1) // page_size))
+        results: list[SearchResult] = []
+        for page in range(pages):
+            url = "https://api.search.brave.com/res/v1/web/search?" + urlencode(
+                _brave_params(query, limit=page_size, offset=page)
             )
+            response = fetch_url(
+                url,
+                headers={
+                    "Accept": "application/json",
+                    "X-Subscription-Token": token,
+                },
+            )
+            payload = _parse_json(response.text, url)
+            web_results = (payload.get("web") or {}).get("results", [])
+            if not web_results:
+                break
+            for item in web_results:
+                if len(results) >= requested:
+                    break
+                results.append(
+                    SearchResult(
+                        title=item.get("title") or item.get("url") or "",
+                        url=item.get("url") or "",
+                        snippet=item.get("description") or "",
+                        source=self.name,
+                        published_at=item.get("age"),
+                        rank=len(results) + 1,
+                    )
+                )
+            if len(results) >= requested:
+                break
         return rank_results(query, results)
 
 
@@ -242,47 +324,36 @@ class OpenAlexSearch:
     name = "openalex"
 
     def search(self, query: str, *, limit: int = 10) -> list[SearchResult]:
-        token = _secret_env("OPENALEX_API_KEY")
-        if not token:
-            raise FetchError("OPENALEX_API_KEY is required for OpenAlex search")
-        url = "https://api.openalex.org/works?" + urlencode(
-            {
-                "api_key": token,
-                "search": query,
-                "per_page": min(limit, 100),
-                "sort": "relevance_score:desc",
-                "select": ",".join(
-                    [
-                        "id",
-                        "doi",
-                        "title",
-                        "display_name",
-                        "publication_year",
-                        "publication_date",
-                        "type",
-                        "cited_by_count",
-                        "is_retracted",
-                        "open_access",
-                        "primary_location",
-                        "abstract_inverted_index",
-                    ]
-                ),
-            }
-        )
-        response = fetch_url(url, headers={"Accept": "application/json"})
-        payload = _parse_json(response.text, url)
-        results = []
-        for idx, item in enumerate(payload.get("results", [])[:limit], start=1):
-            results.append(
-                SearchResult(
-                    title=item.get("display_name") or item.get("title") or item.get("id") or "",
-                    url=_openalex_url(item),
-                    snippet=_openalex_snippet(item),
-                    source=self.name,
-                    published_at=item.get("publication_date") or _year_as_date(item.get("publication_year")),
-                    rank=idx,
+        requested = max(limit, 0)
+        if requested == 0:
+            return []
+        cursor = "*"
+        results: list[SearchResult] = []
+        while len(results) < requested:
+            params = _openalex_params(query, limit=min(100, requested - len(results)), cursor=cursor)
+            url = "https://api.openalex.org/works?" + urlencode(params)
+            response = fetch_url(url, headers={"Accept": "application/json"})
+            payload = _parse_json(response.text, url)
+            page_items = payload.get("results", [])
+            if not page_items:
+                break
+            for item in page_items:
+                if len(results) >= requested:
+                    break
+                results.append(
+                    SearchResult(
+                        title=item.get("display_name") or item.get("title") or item.get("id") or "",
+                        url=_openalex_url(item),
+                        snippet=_openalex_snippet(item),
+                        source=self.name,
+                        published_at=item.get("publication_date") or _year_as_date(item.get("publication_year")),
+                        rank=len(results) + 1,
+                        metadata=_openalex_metadata(item),
+                    )
                 )
-            )
+            cursor = _openalex_next_cursor(payload)
+            if not cursor:
+                break
         return rank_results(query, results)
 
 
@@ -357,7 +428,7 @@ META_PROFILES: dict[str, tuple[str, ...]] = {
     "broad": ("ddg", "github", "openalex", "searxng"),
     "docs": ("ddg", "searxng", "github", "jina"),
     "scholarly": ("openalex", "searxng", "ddg"),
-    "code": ("github", "searxng", "ddg"),
+    "code": ("github_code", "github", "searxng", "ddg"),
     "fresh": ("ddg", "searxng", "brave"),
     "local": ("feed", "ddg", "github"),
     "monitoring": ("feed", "ddg", "github"),
@@ -369,6 +440,7 @@ PROVIDERS: dict[str, SearchProvider] = {
     "ddg": DuckDuckGoSearch(),
     "feed": FeedSearch(),
     "github": GitHubRepoSearch(),
+    "github_code": GitHubCodeSearch(),
     "meta": MetaSearch(),
     "openalex": OpenAlexSearch(),
     "jina": JinaSearch(),
@@ -497,6 +569,11 @@ def provider_status() -> list[dict[str, str]]:
         },
         {"provider": "github", "status": "ok", "detail": "gh CLI or GitHub REST; GITHUB_TOKEN optional"},
         {
+            "provider": "github_code",
+            "status": "ok" if os.environ.get("GITHUB_TOKEN") else "off",
+            "detail": "GitHub REST code search with text-match metadata; requires GITHUB_TOKEN",
+        },
+        {
             "provider": "jina",
             "status": "ok" if os.environ.get("JINA_API_KEY") else "off",
             "detail": "JINA_API_KEY optional; reader does not require it",
@@ -513,8 +590,8 @@ def provider_status() -> list[dict[str, str]]:
         },
         {
             "provider": "openalex",
-            "status": "ok" if _secret_env("OPENALEX_API_KEY") else "off",
-            "detail": "OPENALEX_API_KEY optional; uses scholarly works search",
+            "status": "ok",
+            "detail": "official scholarly works API; OPENALEX_API_KEY and OPENALEX_MAILTO optional",
         },
         {
             "provider": "meta",
@@ -522,6 +599,25 @@ def provider_status() -> list[dict[str, str]]:
             "detail": f"health-aware metasearch fan-out; profile={_meta_profile()} providers={','.join(_meta_provider_names(_meta_profile()))}",
         },
     ]
+
+
+def searxng_preflight(query: str = "katala") -> dict[str, str | int]:
+    base_url = os.environ.get("KWR_SEARXNG_URL", "").rstrip("/")
+    if not base_url:
+        raise FetchError("KWR_SEARXNG_URL is required for SearXNG preflight")
+    url = base_url + "/search?" + urlencode(_searxng_params(query))
+    response = fetch_url(url, headers={"Accept": "application/json"})
+    payload = _parse_json(response.text, url)
+    results = payload.get("results")
+    if not isinstance(results, list):
+        raise FetchError(f"SearXNG JSON response from {url} has no results list")
+    return {
+        "provider": "searxng",
+        "status": "ok",
+        "url": response.url,
+        "status_code": response.status,
+        "result_count": len(results),
+    }
 
 
 def _meta_profile() -> str:
@@ -551,8 +647,10 @@ def _rewrite_query_for_provider(query: str, *, provider: str, profile: str) -> s
     return query
 
 
-def _searxng_params(query: str) -> dict[str, str]:
+def _searxng_params(query: str, *, page: int = 1) -> dict[str, str]:
     params = {"q": query, "format": "json"}
+    if page > 1:
+        params["pageno"] = str(page)
     env_to_param = {
         "KWR_SEARXNG_CATEGORIES": "categories",
         "KWR_SEARXNG_ENGINES": "engines",
@@ -563,8 +661,20 @@ def _searxng_params(query: str) -> dict[str, str]:
     for env_name, param_name in env_to_param.items():
         value = os.environ.get(env_name, "").strip()
         if value:
+            _validate_searxng_param(env_name, param_name, value)
             params[param_name] = value
     return params
+
+
+def _validate_searxng_param(env_name: str, param_name: str, value: str) -> None:
+    if param_name == "time_range" and value not in {"day", "week", "month", "year"}:
+        raise FetchError(f"{env_name} must be one of: day, week, month, year")
+    if param_name == "safesearch":
+        if not value.isdigit():
+            raise FetchError(f"{env_name} must be an integer from 0 to 2")
+        level = int(value)
+        if level < 0 or level > 2:
+            raise FetchError(f"{env_name} must be an integer from 0 to 2")
 
 
 class _DuckDuckGoHTMLParser(HTMLParser):
@@ -632,15 +742,200 @@ def _parse_json(text: str, url: str) -> Any:
 
 def _github_snippet(item: dict) -> str:
     parts = []
+    if item.get("language"):
+        parts.append(f"language={item['language']}")
     if item.get("description"):
         parts.append(str(item["description"]))
     if item.get("stargazersCount") is not None:
         parts.append(f"stars={item['stargazersCount']}")
     if item.get("updatedAt"):
         parts.append(f"updated={item['updatedAt']}")
+    license_name = _github_license_name(item.get("license"))
+    if license_name:
+        parts.append(f"license={license_name}")
+    topics = item.get("topics") or []
+    if topics:
+        parts.append("topics=" + ",".join(str(topic) for topic in topics[:6]))
     if item.get("isFork"):
         parts.append("fork=true")
     return " | ".join(parts)
+
+
+def _github_metadata(item: dict) -> dict[str, Any]:
+    metadata: dict[str, Any] = {}
+    mappings = {
+        "package_name": "name",
+        "maintainer": "ownerLogin",
+        "language": "language",
+        "homepage": "homepage",
+        "source_code_url": "cloneUrl",
+    }
+    for out_key, item_key in mappings.items():
+        value = item.get(item_key)
+        if value:
+            metadata[out_key] = value
+    if item.get("stargazersCount") is not None:
+        metadata["stars"] = item["stargazersCount"]
+    topics = item.get("topics") or []
+    if topics:
+        metadata["topics"] = list(topics)
+    license_name = _github_license_name(item.get("license"))
+    if license_name:
+        metadata["license_name"] = license_name
+    license_url = _github_license_url(item.get("license"))
+    if license_url:
+        metadata["license_url"] = license_url
+    return metadata
+
+
+def _github_rest_item(item: dict) -> dict[str, Any]:
+    owner = item.get("owner") or {}
+    return {
+        "name": item.get("name"),
+        "description": item.get("description"),
+        "stargazersCount": item.get("stargazers_count"),
+        "updatedAt": item.get("updated_at"),
+        "isFork": item.get("fork"),
+        "language": item.get("language"),
+        "topics": item.get("topics") or [],
+        "license": item.get("license"),
+        "homepage": item.get("homepage"),
+        "cloneUrl": item.get("clone_url"),
+        "ownerLogin": owner.get("login"),
+    }
+
+
+def _github_license_name(value: object) -> str:
+    if isinstance(value, dict):
+        return str(value.get("name") or value.get("spdx_id") or "").strip()
+    return ""
+
+
+def _github_license_url(value: object) -> str:
+    if not isinstance(value, dict):
+        return ""
+    spdx_id = str(value.get("spdx_id") or "").strip()
+    if not spdx_id or spdx_id.upper() == "NOASSERTION":
+        return ""
+    return f"https://spdx.org/licenses/{spdx_id}.html"
+
+
+def _github_code_params(query: str, *, page: int, per_page: int) -> dict[str, str | int]:
+    return {"q": query, "sort": "indexed", "per_page": min(per_page, 100), "page": page}
+
+
+def _github_code_headers(token: str) -> dict[str, str]:
+    return {
+        "Accept": "application/vnd.github.text-match+json",
+        "Authorization": f"Bearer {token}",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+
+
+def _github_code_invalid_query(exc: FetchError) -> bool:
+    return str(exc).startswith("HTTP 422 ")
+
+
+def _github_code_fragment(value: object) -> str:
+    if not isinstance(value, list):
+        return ""
+    fragments: list[str] = []
+    for match in value:
+        if not isinstance(match, dict):
+            continue
+        if match.get("object_type") != "FileContent" or match.get("property") != "content":
+            continue
+        fragment = collapse_space(str(match.get("fragment") or ""))
+        if fragment:
+            fragments.append(fragment)
+    return " ... ".join(fragments[:3])
+
+
+def _github_code_title(repo_name: str, path: str, url: object) -> str:
+    if repo_name and path:
+        return f"{repo_name} - {path}"
+    if path:
+        return path
+    return str(url or "")
+
+
+def _github_code_snippet(repo: dict, path: str, fragment: str) -> str:
+    parts = []
+    description = repo.get("description")
+    if description:
+        parts.append(str(description))
+    if path:
+        parts.append(f"path={path}")
+    language = repo.get("language")
+    if language:
+        parts.append(f"language={language}")
+    if fragment:
+        parts.append(fragment[:420])
+    return " | ".join(parts)
+
+
+def _brave_params(query: str, *, limit: int, offset: int = 0) -> dict[str, str | int]:
+    params: dict[str, str | int] = {"q": query, "count": min(limit, 20)}
+    if offset:
+        params["offset"] = offset
+    for env_name, param_name in (
+        ("BRAVE_SEARCH_COUNTRY", "country"),
+        ("BRAVE_SEARCH_LANG", "search_lang"),
+        ("BRAVE_UI_LANG", "ui_lang"),
+    ):
+        value = os.environ.get(env_name, "").strip()
+        if value:
+            params[param_name] = value
+    freshness = _brave_freshness(os.environ.get("BRAVE_FRESHNESS", ""))
+    if freshness:
+        params["freshness"] = freshness
+    safesearch = _brave_safesearch(os.environ.get("BRAVE_SAFESEARCH", ""))
+    if safesearch:
+        params["safesearch"] = safesearch
+    return params
+
+
+def _brave_freshness(value: str) -> str:
+    freshness = value.strip()
+    if not freshness:
+        return ""
+    mapped = {
+        "day": "pd",
+        "week": "pw",
+        "month": "pm",
+        "year": "py",
+        "past_day": "pd",
+        "past_week": "pw",
+        "past_month": "pm",
+        "past_year": "py",
+    }.get(freshness.lower(), freshness)
+    if mapped in {"pd", "pw", "pm", "py"} or _brave_date_range(mapped):
+        return mapped
+    raise FetchError("BRAVE_FRESHNESS must be day/week/month/year, pd/pw/pm/py, or YYYY-MM-DDtoYYYY-MM-DD")
+
+
+def _brave_date_range(value: str) -> bool:
+    start, sep, end = value.partition("to")
+    return (
+        sep == "to"
+        and len(start) == 10
+        and len(end) == 10
+        and start[4] == "-"
+        and start[7] == "-"
+        and end[4] == "-"
+        and end[7] == "-"
+        and start.replace("-", "").isdigit()
+        and end.replace("-", "").isdigit()
+    )
+
+
+def _brave_safesearch(value: str) -> str:
+    safesearch = value.strip().lower()
+    if not safesearch:
+        return ""
+    if safesearch in {"off", "moderate", "strict"}:
+        return safesearch
+    raise FetchError("BRAVE_SAFESEARCH must be off, moderate, or strict")
 
 
 def _secret_env(name: str) -> str:
@@ -660,13 +955,158 @@ def _secret_env(name: str) -> str:
     return completed.stdout.strip()
 
 
+def _openalex_params(query: str, *, limit: int, cursor: str = "*") -> dict[str, str | int]:
+    params: dict[str, str | int] = {
+        "search": query,
+        "per_page": min(limit, 100),
+        "cursor": cursor,
+        "sort": "relevance_score:desc",
+        "select": ",".join(
+            [
+                "id",
+                "doi",
+                "title",
+                "display_name",
+                "publication_year",
+                "publication_date",
+                "type",
+                "cited_by_count",
+                "is_retracted",
+                "open_access",
+                "primary_location",
+                "best_oa_location",
+                "content_url",
+                "abstract_inverted_index",
+            ]
+        ),
+    }
+    token = _secret_env("OPENALEX_API_KEY").strip()
+    if token:
+        params["api_key"] = token
+    mailto = os.environ.get("OPENALEX_MAILTO", "").strip()
+    if mailto:
+        params["mailto"] = mailto
+    filters = [
+        value
+        for value in (
+            _openalex_language_filter(os.environ.get("OPENALEX_LANGUAGE", "")),
+            _openalex_year_filter(os.environ.get("OPENALEX_YEAR", "")),
+            _openalex_date_filter("from_publication_date", os.environ.get("OPENALEX_FROM_DATE", "")),
+            _openalex_date_filter("to_publication_date", os.environ.get("OPENALEX_TO_DATE", "")),
+            _openalex_bool_filter("has_content.pdf", os.environ.get("OPENALEX_HAS_PDF", "")),
+            _openalex_bool_filter("has_abstract", os.environ.get("OPENALEX_HAS_ABSTRACT", "")),
+        )
+        if value
+    ]
+    if filters:
+        params["filter"] = ",".join(filters)
+    return params
+
+
+def _openalex_next_cursor(payload: dict) -> str:
+    meta = payload.get("meta")
+    if not isinstance(meta, dict):
+        return ""
+    cursor = meta.get("next_cursor")
+    return str(cursor) if cursor else ""
+
+
+def _openalex_language_filter(value: str) -> str:
+    language = value.strip()
+    if not language or language.lower() == "all":
+        return ""
+    iso2 = language.split("-", 1)[0].split("_", 1)[0].lower()
+    if len(iso2) == 2 and iso2.isalpha():
+        return f"language:{iso2}"
+    return ""
+
+
+def _openalex_year_filter(value: str) -> str:
+    year = value.strip()
+    if len(year) == 4 and year.isdigit():
+        return f"publication_year:{year}"
+    return ""
+
+
+def _openalex_date_filter(name: str, value: str) -> str:
+    date = value.strip()
+    if not date:
+        return ""
+    if _iso_date(date):
+        return f"{name}:{date}"
+    raise FetchError(f"{name.upper()} must use YYYY-MM-DD")
+
+
+def _openalex_bool_filter(name: str, value: str) -> str:
+    raw = value.strip().lower()
+    if not raw:
+        return ""
+    if raw in {"1", "true", "yes", "on"}:
+        return f"{name}:true"
+    if raw in {"0", "false", "no", "off"}:
+        return f"{name}:false"
+    raise FetchError(f"{name.upper()} must be true or false")
+
+
+def _iso_date(value: str) -> bool:
+    return (
+        len(value) == 10
+        and value[4] == "-"
+        and value[7] == "-"
+        and value.replace("-", "").isdigit()
+    )
+
+
 def _openalex_url(item: dict) -> str:
     primary_location = item.get("primary_location") or {}
     if primary_location.get("landing_page_url"):
         return str(primary_location["landing_page_url"])
+    best_oa_location = item.get("best_oa_location") or {}
+    if best_oa_location.get("landing_page_url"):
+        return str(best_oa_location["landing_page_url"])
     if item.get("doi"):
         return str(item["doi"])
     return str(item.get("id") or "")
+
+
+def _openalex_metadata(item: dict) -> dict[str, Any]:
+    metadata: dict[str, Any] = {}
+    mappings = {
+        "openalex_id": "id",
+        "doi": "doi",
+        "work_type": "type",
+        "publication_year": "publication_year",
+        "cited_by_count": "cited_by_count",
+        "content_url": "content_url",
+    }
+    for out_key, item_key in mappings.items():
+        value = item.get(item_key)
+        if value is not None and value != "":
+            metadata[out_key] = value
+    _add_openalex_location_metadata(metadata, "primary", item.get("primary_location"))
+    _add_openalex_location_metadata(metadata, "best_oa", item.get("best_oa_location"))
+    open_access = item.get("open_access") or {}
+    if isinstance(open_access, dict):
+        for key in ("is_oa", "oa_status"):
+            value = open_access.get(key)
+            if value is not None and value != "":
+                metadata[f"open_access_{key}"] = value
+    return metadata
+
+
+def _add_openalex_location_metadata(metadata: dict[str, Any], prefix: str, value: object) -> None:
+    if not isinstance(value, dict):
+        return
+    for key in ("landing_page_url", "pdf_url", "is_oa", "license", "version"):
+        field_value = value.get(key)
+        if field_value is not None and field_value != "":
+            metadata[f"{prefix}_{key}"] = field_value
+    source = value.get("source")
+    if isinstance(source, dict):
+        for key in ("id", "display_name", "type"):
+            field_value = source.get(key)
+            if field_value is not None and field_value != "":
+                metadata[f"{prefix}_source_{key}"] = field_value
 
 
 def _openalex_snippet(item: dict) -> str:

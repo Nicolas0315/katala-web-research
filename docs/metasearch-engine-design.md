@@ -76,5 +76,13 @@ Before final Katala scoring, `meta` applies health-aware Reciprocal Rank Fusion 
 
 ## Next Engine Improvements
 
+- Optional Firecrawl-inspired enrichment pass: fetch top search candidates with the configured reader, merge page text into thin snippets, keep read failures in metadata, and re-rank. Implemented as `kwr search --enrich-top N --reader auto|jina|direct`.
+- Firecrawl-inspired query filters: `kwr search --category github|research|pdf --include-domain DOMAIN --exclude-domain DOMAIN` rewrites the provider query using `site:` and `filetype:pdf` operators and annotates matched categories in result metadata.
+- Archive-backed highlights: `kwr search --highlight-top N` mirrors Firecrawl's index-backed highlight shape with local SQLite pages instead of remote index/GCS/model dependencies.
+- Candidate buffering: search commands default to fetching `limit * 2` candidates before final trimming so diversity and source-quality scoring have enough material to work with. Tune with `--candidate-multiplier`.
+- SearXNG pagination: large limits fetch enough SearXNG result pages before Katala ranking trims the candidate set.
+- SearXNG-compatible env validation: `KWR_SEARXNG_TIME_RANGE` and `KWR_SEARXNG_SAFESEARCH` are checked locally before the provider sends a request.
+- Provider rank retention: final ranking overwrites `rank`, but the original provider position remains available as `metadata.provider_rank`.
+- Local repo FTS uses weighted BM25 fields so repo name, path, title, and deterministic context can outrank body-only matches.
 - Host/source quotas exposed as config
 - Optional local SearXNG instance bootstrap, kept outside the MIT code path

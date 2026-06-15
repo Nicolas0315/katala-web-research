@@ -50,6 +50,18 @@ class RankTests(unittest.TestCase):
         self.assertLessEqual(len(example_hosts), 3)
         self.assertIn("https://docs.github.com/agent", {r.url for r in ranked})
 
+    def test_preserves_provider_rank_before_final_rerank(self):
+        results = [
+            SearchResult(title="Agent research docs", url="https://docs.github.com/agent", rank=7),
+            SearchResult(title="Agent research article", url="https://example.com/agent", rank=1),
+        ]
+
+        ranked = rank_results("agent research", results)
+        by_url = {result.url: result for result in ranked}
+
+        self.assertEqual(by_url["https://docs.github.com/agent"].metadata["provider_rank"], 7)
+        self.assertEqual(by_url["https://example.com/agent"].metadata["provider_rank"], 1)
+
     def test_korean_hangul_produces_tokens(self):
         tokens = query_tokens("크리에이터 분석")
         self.assertIn("크리에이터", tokens)
