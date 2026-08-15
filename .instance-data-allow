@@ -1,0 +1,15 @@
+# Exemptions from the shared instance-data gate. Format: "<scan label>: <ERE>".
+# Each applies to the named scan only. Add a reason; an exemption without one is
+# indistinguishable from a mistake six months later.
+#
+# This file is tracked and therefore scanned like any other. Keep the reasons free
+# of forms the scans catch — spelling one out here would need an exemption of its own.
+#
+# Patterns are tested against git grep output, so they see "path:line:content".
+# Anchoring with ^ matches the path, not the text — write the pattern unanchored.
+
+# Design notes and plans carry their date in the filename, and the index links them by
+# that name. A metadata field records when a document was written. The heuristic reads
+# a research word next to a date as a narrated session; in both of these it is a title
+# and a field, and the prose beside them is already free of local paths.
+dated observation: docs/[a-z0-9-]+-[0-9]{4}-[0-9]{2}-[0-9]{2}\.md|audited_at:

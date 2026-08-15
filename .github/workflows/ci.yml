@@ -14,6 +14,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # This repository published the operator's home paths in eight documents for three
+  # months while CI was green, because CI only ran the tests. The gate is shared with
+  # the rest of the organisation so a blind spot found anywhere closes here too.
+  no-instance-data:
+    uses: katalalab/.github/.github/workflows/instance-data-gate.yml@main
+
   verify:
     runs-on: ubuntu-latest
     strategy:
