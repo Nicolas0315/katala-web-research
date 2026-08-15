@@ -1,7 +1,6 @@
 # Firecrawl Search Source RE Notes
 
 date: 2026-06-15
-local mirror: `C:\Users\ogosh\work\firecrawl-research\mirrors\github-firecrawl\firecrawl`
 
 Read source paths:
 - `apps/api/src/search/execute.ts`

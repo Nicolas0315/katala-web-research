@@ -70,8 +70,8 @@ Why:
 
 Local inputs:
 
-- `/Users/s30519/work/agent-skills-private/skills/openalex-search/SKILL.md` already documents year, open-access, citation, author, and detail workflows.
-- `/Users/s30519/work/research/vendor/mcp-searxng/README.md` exposes useful search parameters: pagination, language, safe search, time range, URL read, and content cache.
+- a local OpenAlex search skill definition already documents year, open-access, citation, author, and detail workflows.
+- the `mcp-searxng` README exposes useful search parameters: pagination, language, safe search, time range, URL read, and content cache.
 
 ### 3. Self-Hosted SearXNG Adapter Hardening
 

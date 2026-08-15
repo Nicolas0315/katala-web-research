@@ -2,7 +2,6 @@
 
 date: 2026-06-15
 source: SearXNG `searx/engines/openalex.py`
-local object store: `C:\Users\ogosh\work\firecrawl-research\mirrors\github-searxng\searxng`
 commit: `cf1410a`
 
 Observed engine shape:

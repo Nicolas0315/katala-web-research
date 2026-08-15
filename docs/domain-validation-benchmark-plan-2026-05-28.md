@@ -41,7 +41,7 @@ Gate command:
 
 ```sh
 rtk env PYTHONPATH=src python3 -m katala_web_research.cli repos scan \
-  /Users/s30519/work/nicolas-starred-repos/repos \
+  <path-to-cloned-repos> \
   --archive /tmp/kwr-clone-applicability-2026-05-28.sqlite \
   --max-repos 80 \
   --max-files-per-repo 8 \

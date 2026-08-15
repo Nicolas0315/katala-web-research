@@ -1,7 +1,6 @@
 # SearXNG Source Notes
 
 date: 2026-06-15
-local object store: `C:\Users\ogosh\work\firecrawl-research\mirrors\github-searxng\searxng`
 commit: `cf1410a`
 
 Checkout note:
